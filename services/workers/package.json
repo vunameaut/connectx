@@ -1,0 +1,22 @@
+{
+  "name": "@connectx/workers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ConnectX Background Jobs and Push Dispatcher Worker",
+  "type": "module",
+  "main": "./dist/push-dispatcher.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@connectx/shared-types": "*",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.3"
+  }
+}

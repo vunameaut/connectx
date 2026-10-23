@@ -1,0 +1,21 @@
+{
+  "name": "@connectx/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ConnectX React Native Cross-Platform Mobile Application",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@connectx/shared-types": "*",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.3"
+  }
+}
