@@ -148,8 +148,17 @@ class HomeActivity : AppCompatActivity() {
         // Xin quyền tự động 1 chạm khi mở app
         checkStartupPermissions()
 
-        // Bắt đầu CallService chạy nền để nhận cuộc gọi ngay cả khi thoát app
-        com.vhn.connectx.net.CallService.start(this)
+        // Clear any previous crash logs
+        try {
+            val crashPrefs = getSharedPreferences("connectx_crash", MODE_PRIVATE)
+            val lastCrash = crashPrefs.getString("last_crash", null)
+            if (!lastCrash.isNullOrBlank()) {
+                android.util.Log.e("ConnectX_Crash", "Previous crash detected:\n$lastCrash")
+                crashPrefs.edit().clear().apply()
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
 
         // Check for updates
         UpdateManager.checkForUpdate(this, isManual = false)
@@ -158,6 +167,7 @@ class HomeActivity : AppCompatActivity() {
     private var friendRequestListeners: Pair<com.google.firebase.firestore.ListenerRegistration?, com.google.firebase.firestore.ListenerRegistration?>? = null
     private val conversationListeners = mutableListOf<com.google.firebase.firestore.ListenerRegistration>()
     private var incomingCallListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var lastHandledCallId = ""
 
     override fun onResume() {
         super.onResume()
@@ -174,7 +184,13 @@ class HomeActivity : AppCompatActivity() {
         friendRequestListeners = null
         conversationListeners.forEach { it.remove() }
         conversationListeners.clear()
-        // Không hủy incoming call của CallService
+        // Giữ incomingCallListener để vẫn nhận cuộc gọi khi thu nhỏ app
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        incomingCallListener?.remove()
+        incomingCallListener = null
     }
 
     private fun startListeningIncomingCalls() {
@@ -183,15 +199,81 @@ class HomeActivity : AppCompatActivity() {
 
         incomingCallListener?.remove()
         incomingCallListener = com.vhn.connectx.net.FirebaseSyncManager.listenIncomingCall(myEmail) { callId, callerName, callerEmail, isVideo ->
-            // Auto open CallActivity in incoming mode
-            val intent = Intent(this, CallActivity::class.java).apply {
-                putExtra("EXTRA_CALL_ID", callId)
-                putExtra("EXTRA_CONTACT_NAME", callerName)
-                putExtra("EXTRA_CONTACT_EMAIL", callerEmail)
-                putExtra("EXTRA_IS_VIDEO", isVideo)
-                putExtra("EXTRA_IS_INCOMING", true)
+            if (callId == lastHandledCallId) return@listenIncomingCall
+            lastHandledCallId = callId
+            showIncomingCall(callId, callerName, callerEmail, isVideo)
+        }
+    }
+
+    private fun showIncomingCall(
+        callId: String,
+        callerName: String,
+        callerEmail: String,
+        isVideo: Boolean
+    ) {
+        val callIntent = Intent(this, CallActivity::class.java).apply {
+            putExtra("EXTRA_CALL_ID", callId)
+            putExtra("EXTRA_CONTACT_NAME", callerName)
+            putExtra("EXTRA_CONTACT_EMAIL", callerEmail)
+            putExtra("EXTRA_IS_VIDEO", isVideo)
+            putExtra("EXTRA_IS_INCOMING", true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+
+        try {
+            val pendingIntent = android.app.PendingIntent.getActivity(
+                this,
+                callId.hashCode(),
+                callIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val ringtoneUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
+            val manager = getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val audioAttributes = android.media.AudioAttributes.Builder()
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .build()
+
+                val channel = android.app.NotificationChannel(
+                    "connectx_incoming_calls",
+                    "ConnectX Cuộc gọi đến",
+                    android.app.NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Thông báo chuông cuộc gọi thoại & video ConnectX"
+                    setSound(ringtoneUri, audioAttributes)
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 1000, 1000, 1000, 1000)
+                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                }
+                manager.createNotificationChannel(channel)
             }
-            startActivity(intent)
+
+            val notification = androidx.core.app.NotificationCompat.Builder(this, "connectx_incoming_calls")
+                .setContentTitle(if (isVideo) "Cuộc gọi Video đến" else "Cuộc gọi Thoại đến")
+                .setContentText("$callerName đang gọi cho bạn...")
+                .setSmallIcon(R.drawable.ic_calls)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX)
+                .setCategory(androidx.core.app.NotificationCompat.CATEGORY_CALL)
+                .setAutoCancel(true)
+                .setSound(ringtoneUri)
+                .setVibrate(longArrayOf(0, 1000, 1000, 1000, 1000))
+                .setFullScreenIntent(pendingIntent, true)
+                .setContentIntent(pendingIntent)
+                .addAction(R.drawable.ic_calls, "Nhấc máy", pendingIntent)
+                .build()
+
+            manager.notify(1002, notification)
+        } catch (e: Exception) {
+            android.util.Log.w("HomeActivity", "Notification display error: ${e.message}")
+        }
+
+        try {
+            startActivity(callIntent)
+        } catch (e: Exception) {
+            android.util.Log.w("HomeActivity", "Direct activity start error: ${e.message}")
         }
     }
 

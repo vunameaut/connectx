@@ -25,15 +25,6 @@ class MainApplication : Application() {
             Log.e("MainApplication", "FirebaseApp init warning: ${e.message}")
         }
 
-        // Khởi động CallService chạy nền để luôn sẵn sàng nhận cuộc gọi đến
-        try {
-            val sessionManager = com.vhn.connectx.model.SessionManager(this)
-            if (sessionManager.isLoggedIn) {
-                com.vhn.connectx.net.CallService.start(this)
-            }
-        } catch (e: Exception) {
-            Log.w("MainApplication", "Could not start CallService: ${e.message}")
-        }
 
         val originalHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
