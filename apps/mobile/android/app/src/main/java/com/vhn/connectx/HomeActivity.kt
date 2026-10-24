@@ -33,10 +33,10 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var btnSearch: ImageView
     private lateinit var btnAddAction: ImageView
 
-    private lateinit var viewChats: LinearLayout
-    private lateinit var viewContacts: LinearLayout
-    private lateinit var viewCalls: LinearLayout
-    private lateinit var viewProfile: LinearLayout
+    private lateinit var viewChats: View
+    private lateinit var viewContacts: View
+    private lateinit var viewCalls: View
+    private lateinit var viewProfile: View
     private lateinit var bottomNav: BottomNavigationView
 
     // Tab 1: Chats
@@ -157,7 +157,8 @@ class HomeActivity : AppCompatActivity() {
 
         tvProfileDisplayName.text = user.displayName
         tvProfileEmail.text = user.email
-        tvProfileLargeAvatar.text = user.displayName.take(1).uppercase()
+        val initial = user.displayName.ifBlank { user.email.substringBefore("@") }.ifBlank { "U" }.take(1).uppercase()
+        tvProfileLargeAvatar.text = initial
 
         btnCheckUpdate.setOnClickListener {
             UpdateManager.checkForUpdate(this, isManual = true)
