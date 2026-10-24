@@ -39,13 +39,13 @@ export async function buildServer(): Promise<FastifyInstance> {
   // App Version & In-App Auto-Update Endpoint (Mandatory Force Update)
   server.get('/api/v1/app/version', async () => {
     return {
-      versionCode: 4,
-      versionName: '1.0.3',
-      minSupportedVersion: '1.0.3',
+      versionCode: 5,
+      versionName: '1.0.4',
+      minSupportedVersion: '1.0.4',
       updateRequired: true,
       forceUpdate: true,
-      releaseNotes: 'Bản cập nhật v1.0.3: Thêm tính năng xóa bạn bè, nút xóa sạch dữ liệu test để thử nghiệm lại, và tạo lời mời kết bạn mẫu kiểm tra trên 1 máy.',
-      downloadUrl: 'https://github.com/vunameaut/connectx/releases/download/v1.0.3/ConnectX-v1.0.3.apk',
+      releaseNotes: 'Bản cập nhật v1.0.4: Tích hợp Cloud Firestore Real-time Sync, gửi lời mời kết bạn và tin nhắn lập tức hiển thị trên máy đối phương qua Cloud không cần phụ thuộc vào máy chủ nội bộ.',
+      downloadUrl: 'https://github.com/vunameaut/connectx/releases/download/v1.0.4/ConnectX-v1.0.4.apk',
       publishedAt: new Date().toISOString(),
     };
   });

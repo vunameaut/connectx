@@ -90,15 +90,38 @@ class ChatActivity : AppCompatActivity() {
         loadLocalMessages()
     }
 
+    private var messageListener: com.google.firebase.firestore.ListenerRegistration? = null
+
     override fun onResume() {
         super.onResume()
         pollMessagesFromServer()
         syncHandler.postDelayed(syncRunnable, 2500)
+
+        // Real-time Cloud Firestore Message Listener
+        messageListener?.remove()
+        messageListener = com.vhn.connectx.net.FirebaseSyncManager.listenMessages(convId, sessionManager.currentUser.id) { remoteMessages ->
+            if (remoteMessages.isNotEmpty()) {
+                var hasNew = false
+                for (remoteMsg in remoteMessages) {
+                    if (messages.none { it.id == remoteMsg.id }) {
+                        messages.add(remoteMsg)
+                        appDataStore.addMessage(convId, remoteMsg)
+                        hasNew = true
+                    }
+                }
+                if (hasNew) {
+                    messageAdapter.notifyDataSetChanged()
+                    rvMessages.smoothScrollToPosition(messages.size - 1)
+                }
+            }
+        }
     }
 
     override fun onPause() {
         super.onPause()
         syncHandler.removeCallbacks(syncRunnable)
+        messageListener?.remove()
+        messageListener = null
     }
 
     private fun initViews() {
@@ -221,10 +244,11 @@ class ChatActivity : AppCompatActivity() {
         etMessageInput.setText("")
         rvMessages.smoothScrollToPosition(messages.size - 1)
 
-        // Sync with backend server so recipient receives it instantly
-        ApiClient.sendMessageToServer(this, convId, newMsg) { success ->
-            // Message synced to server
-        }
+        // Upload to Cloud Firestore so the other phone gets it in REAL-TIME (no server needed)
+        com.vhn.connectx.net.FirebaseSyncManager.sendMessage(convId, newMsg) {}
+
+        // Also sync with backend server as fallback
+        ApiClient.sendMessageToServer(this, convId, newMsg) { success -> }
     }
 
     private fun handleImagePicked(uri: Uri) {
@@ -260,10 +284,11 @@ class ChatActivity : AppCompatActivity() {
             rvMessages.smoothScrollToPosition(messages.size - 1)
             Toast.makeText(this, "Đã gửi hình ảnh!", Toast.LENGTH_SHORT).show()
 
-            // Synchronize with server
-            ApiClient.sendMessageToServer(this, convId, imageMsg) { success ->
-                // Image message synced
-            }
+            // Upload to Cloud Firestore for real-time delivery
+            com.vhn.connectx.net.FirebaseSyncManager.sendMessage(convId, imageMsg) {}
+
+            // Synchronize with server fallback
+            ApiClient.sendMessageToServer(this, convId, imageMsg) { success -> }
 
             // Attempt Cloudinary upload in background if online
             val token = sessionManager.supabaseToken ?: "token"

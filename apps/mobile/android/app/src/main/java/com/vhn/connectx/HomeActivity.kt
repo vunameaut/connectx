@@ -122,10 +122,36 @@ class HomeActivity : AppCompatActivity() {
         UpdateManager.checkForUpdate(this, isManual = false)
     }
 
+    private var friendRequestListener: com.google.firebase.firestore.ListenerRegistration? = null
+
     override fun onResume() {
         super.onResume()
         refreshData()
         syncFriendRequestsFromServer()
+        startListeningRealtimeFriendRequests()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        friendRequestListener?.remove()
+        friendRequestListener = null
+    }
+
+    private fun startListeningRealtimeFriendRequests() {
+        val myEmail = sessionManager.currentUser.email
+        if (myEmail.isBlank()) return
+        friendRequestListener?.remove()
+        friendRequestListener = com.vhn.connectx.net.FirebaseSyncManager.listenIncomingFriendRequests(myEmail) { incoming ->
+            var hasChange = false
+            for (req in incoming) {
+                if (appDataStore.sendFriendRequest(req)) {
+                    hasChange = true
+                }
+            }
+            if (hasChange || incoming.size != pendingRequests.size) {
+                refreshData()
+            }
+        }
     }
 
     private fun initViews() {
@@ -426,10 +452,11 @@ class HomeActivity : AppCompatActivity() {
                 // Save locally
                 appDataStore.sendFriendRequest(newReq)
 
-                // Send to backend server
-                ApiClient.sendFriendRequest(this, newReq) { success ->
-                    // Request sent to server
-                }
+                // Upload to Cloud Firestore so the other device receives it instantly online
+                com.vhn.connectx.net.FirebaseSyncManager.sendFriendRequest(newReq) {}
+
+                // Send to backend server as fallback
+                ApiClient.sendFriendRequest(this, newReq) { success -> }
 
                 Toast.makeText(this, "Đã gửi lời mời kết bạn tới $targetEmail! Vui lòng chờ đối phương chấp nhận.", Toast.LENGTH_LONG).show()
                 refreshData()
@@ -442,6 +469,7 @@ class HomeActivity : AppCompatActivity() {
         val myUser = sessionManager.currentUser
         val newFriend = appDataStore.acceptFriendRequest(req.id, myUser)
         if (newFriend != null) {
+            com.vhn.connectx.net.FirebaseSyncManager.respondFriendRequest(req.id, "ACCEPTED") {}
             ApiClient.respondFriendRequest(this, req.id, "ACCEPTED") {}
             Toast.makeText(this, "Đã trở thành bạn bè với ${newFriend.displayName}!", Toast.LENGTH_SHORT).show()
             refreshData()
@@ -452,6 +480,7 @@ class HomeActivity : AppCompatActivity() {
 
     private fun handleRejectFriendRequest(req: FriendRequest) {
         appDataStore.rejectFriendRequest(req.id)
+        com.vhn.connectx.net.FirebaseSyncManager.respondFriendRequest(req.id, "REJECTED") {}
         ApiClient.respondFriendRequest(this, req.id, "REJECTED") {}
         Toast.makeText(this, "Đã từ chối lời mời kết bạn", Toast.LENGTH_SHORT).show()
         refreshData()
