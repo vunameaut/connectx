@@ -107,14 +107,16 @@ jobs:
           mkdir -p release-artifacts
           cp apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk release-artifacts/ConnectX-${{ steps.get_version.outputs.TAG }}.apk
           
-          # Generate version.json for In-App Auto-Update checker
+          # Generate version.json for In-App Auto-Update checker (Mandatory Update)
           cat <<EOF > release-artifacts/version.json
           {
             "versionName": "${{ steps.get_version.outputs.VERSION }}",
             "tagName": "${{ steps.get_version.outputs.TAG }}",
             "commit": "${{ github.sha }}",
             "apkFileName": "ConnectX-${{ steps.get_version.outputs.TAG }}.apk",
-            "releaseNotes": "${{ github.event.inputs.release_notes || 'Cập nhật phiên bản mới ConnectX' }}",
+            "forceUpdate": true,
+            "minSupportedVersion": "${{ steps.get_version.outputs.VERSION }}",
+            "releaseNotes": "${{ github.event.inputs.release_notes || 'Cập nhật bắt buộc: Nâng cấp tính năng và bảo mật ConnectX' }}",
             "downloadUrl": "https://github.com/${{ github.repository }}/releases/download/${{ steps.get_version.outputs.TAG }}/ConnectX-${{ steps.get_version.outputs.TAG }}.apk",
             "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }

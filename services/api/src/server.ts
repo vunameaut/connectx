@@ -36,16 +36,17 @@ export async function buildServer(): Promise<FastifyInstance> {
     };
   });
 
-  // App Version & In-App Auto-Update Endpoint
+  // App Version & In-App Auto-Update Endpoint (Mandatory Force Update)
   server.get('/api/v1/app/version', async () => {
     return {
-      versionCode: 1,
-      versionName: '1.0.0',
-      minSupportedVersion: '1.0.0',
-      updateRequired: false,
-      releaseNotes: 'Bản phát hành chính thức ConnectX với tính năng Chat, Cuộc gọi & Chia sẻ màn hình.',
+      versionCode: 2,
+      versionName: '1.0.1',
+      minSupportedVersion: '1.0.1',
+      updateRequired: true,
+      forceUpdate: true,
+      releaseNotes: 'Bản cập nhật bắt buộc: Nâng cấp bảo mật Firebase Auth, Supabase DB & Cloudinary Media.',
       downloadUrl: 'https://github.com/vhn/connectx/releases/latest',
-      publishedAt: '2026-10-24T16:00:00Z',
+      publishedAt: new Date().toISOString(),
     };
   });
 

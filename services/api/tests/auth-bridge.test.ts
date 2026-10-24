@@ -78,4 +78,20 @@ describe('Auth Bridge & Token Exchange Tests', () => {
     });
     expect(resBadAuth.statusCode).toBe(401);
   });
+
+  it('TC-0.3.5: Returns mandatory app version metadata and force update flags', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/app/version',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.forceUpdate).toBe(true);
+    expect(body.updateRequired).toBe(true);
+    expect(body.versionName).toBeDefined();
+    expect(body.minSupportedVersion).toBeDefined();
+    expect(body.downloadUrl).toBeDefined();
+  });
 });
+

@@ -20,6 +20,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.vhn.connectx.model.SessionManager
 import com.vhn.connectx.model.User
 import com.vhn.connectx.net.ApiClient
+import com.vhn.connectx.update.UpdateManager
 
 class LoginActivity : AppCompatActivity() {
 
@@ -63,6 +64,9 @@ class LoginActivity : AppCompatActivity() {
         setupGoogleSignIn()
         setupEmailAuth()
         setupQuickAccounts()
+
+        // Check for mandatory app updates immediately on login screen
+        UpdateManager.checkForUpdate(this, isManual = false)
     }
 
     private fun initViews() {

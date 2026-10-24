@@ -4,22 +4,22 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.app.ProgressDialog
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
+import android.view.KeyEvent
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.vhn.connectx.BuildConfig
-import okhttp3.Call
-import okhttp3.Callback
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
+import com.vhn.connectx.net.ApiClient
+import okhttp3.*
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -39,32 +39,96 @@ data class GithubAsset(
     @SerializedName("size") val size: Long = 0
 )
 
+data class AppVersionResponse(
+    @SerializedName("versionCode") val versionCode: Int = 1,
+    @SerializedName("versionName") val versionName: String = "1.0.0",
+    @SerializedName("minSupportedVersion") val minSupportedVersion: String = "1.0.0",
+    @SerializedName("updateRequired") val updateRequired: Boolean = false,
+    @SerializedName("forceUpdate") val forceUpdate: Boolean = false,
+    @SerializedName("releaseNotes") val releaseNotes: String = "",
+    @SerializedName("downloadUrl") val downloadUrl: String = ""
+)
+
 object UpdateManager {
 
-    // Default GitHub repo coordinates (can be overridden via SharedPreferences if needed)
+    private const val TAG = "UpdateManager"
+
+    // Default GitHub repo coordinates
     var githubRepo: String = "vhn/connectx"
-    var fallbackCheckUrl: String = ""
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
         .build()
 
+    private val gson = Gson()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /**
-     * Checks for a new update from GitHub Releases.
-     * @param activity Context activity
-     * @param isManual True if user clicked "Kiểm tra cập nhật" manually in Profile
+     * Checks for mandatory app updates from backend API or GitHub Releases.
+     * @param activity Context Activity
+     * @param isManual True if user triggered manually in Profile
      */
     fun checkForUpdate(activity: Activity, isManual: Boolean = false) {
+        val backendUrl = "${ApiClient.apiBaseUrl}/api/v1/app/version"
+
+        val request = Request.Builder()
+            .url(backendUrl)
+            .get()
+            .build()
+
+        httpClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.w(TAG, "Backend version check failed, falling back to GitHub Releases: ${e.message}")
+                checkGitHubRelease(activity, isManual)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val body = response.body?.string()
+                if (response.isSuccessful && !body.isNullOrEmpty()) {
+                    try {
+                        val versionInfo = gson.fromJson(body, AppVersionResponse::class.java)
+                        val currentVersion = BuildConfig.VERSION_NAME.trim()
+                        val currentCode = BuildConfig.VERSION_CODE
+
+                        val isNewer = isNewerVersion(versionInfo.versionName, currentVersion)
+                        val isBelowMin = isNewerVersion(versionInfo.minSupportedVersion, currentVersion)
+                        val hasHigherCode = versionInfo.versionCode > currentCode
+                        val isForcedByServer = (versionInfo.forceUpdate || versionInfo.updateRequired) && (isNewer || isBelowMin || hasHigherCode)
+
+                        val updateMandatory = isNewer || isBelowMin || hasHigherCode || isForcedByServer
+
+                        if (updateMandatory) {
+                            mainHandler.post {
+                                if (activity.isFinishing || activity.isDestroyed) return@post
+                                showMandatoryUpdateDialog(
+                                    activity = activity,
+                                    newVersion = versionInfo.versionName,
+                                    releaseNotes = versionInfo.releaseNotes,
+                                    downloadUrl = versionInfo.downloadUrl
+                                )
+                            }
+                            return
+                        } else if (isManual) {
+                            mainHandler.post {
+                                if (activity.isFinishing || activity.isDestroyed) return@post
+                                showLatestVersionDialog(activity, currentVersion)
+                            }
+                            return
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse backend version response", e)
+                    }
+                }
+                checkGitHubRelease(activity, isManual)
+            }
+        })
+    }
+
+    private fun checkGitHubRelease(activity: Activity, isManual: Boolean) {
         val prefs = activity.getSharedPreferences("connectx_update", Context.MODE_PRIVATE)
         val customRepo = prefs.getString("custom_github_repo", githubRepo) ?: githubRepo
-        val url = if (fallbackCheckUrl.isNotEmpty()) {
-            fallbackCheckUrl
-        } else {
-            "https://api.github.com/repos/$customRepo/releases/latest"
-        }
+        val url = "https://api.github.com/repos/$customRepo/releases/latest"
 
         val request = Request.Builder()
             .url(url)
@@ -76,32 +140,24 @@ object UpdateManager {
             override fun onFailure(call: Call, e: IOException) {
                 mainHandler.post {
                     if (isManual) {
-                        Toast.makeText(
-                            activity,
-                            "Không thể kết nối máy chủ GitHub: ${e.message}",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        Toast.makeText(activity, "Không thể kết nối máy chủ cập nhật: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
 
             override fun onResponse(call: Call, response: Response) {
                 val body = response.body?.string()
-                if (!response.isSuccessful || body == null) {
+                if (!response.isSuccessful || body.isNullOrEmpty()) {
                     mainHandler.post {
                         if (isManual) {
-                            Toast.makeText(
-                                activity,
-                                "Bạn đang ở phiên bản mới nhất (v${BuildConfig.VERSION_NAME})",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            showLatestVersionDialog(activity, BuildConfig.VERSION_NAME)
                         }
                     }
                     return
                 }
 
                 try {
-                    val release = Gson().fromJson(body, GithubRelease::class.java)
+                    val release = gson.fromJson(body, GithubRelease::class.java)
                     val latestVersion = release.tagName.removePrefix("v").trim()
                     val currentVersion = BuildConfig.VERSION_NAME.trim()
 
@@ -110,19 +166,23 @@ object UpdateManager {
                         val downloadUrl = apkAsset?.downloadUrl ?: ""
 
                         mainHandler.post {
-                            showUpdateDialog(activity, release, downloadUrl)
+                            if (activity.isFinishing || activity.isDestroyed) return@post
+                            showMandatoryUpdateDialog(
+                                activity = activity,
+                                newVersion = release.tagName,
+                                releaseNotes = release.body,
+                                downloadUrl = downloadUrl
+                            )
                         }
                     } else if (isManual) {
                         mainHandler.post {
-                            AlertDialog.Builder(activity)
-                                .setTitle("ConnectX đã cập nhật")
-                                .setMessage("Phiên bản hiện tại: v$currentVersion\nBạn đang sử dụng phiên bản mới nhất!")
-                                .setPositiveButton("OK", null)
-                                .show()
+                            if (activity.isFinishing || activity.isDestroyed) return@post
+                            showLatestVersionDialog(activity, currentVersion)
                         }
                     }
                 } catch (e: Exception) {
                     mainHandler.post {
+                        if (activity.isFinishing || activity.isDestroyed) return@post
                         if (isManual) {
                             Toast.makeText(activity, "Đang dùng phiên bản mới nhất (v${BuildConfig.VERSION_NAME})", Toast.LENGTH_SHORT).show()
                         }
@@ -134,8 +194,10 @@ object UpdateManager {
 
     private fun isNewerVersion(remote: String, local: String): Boolean {
         if (remote.isEmpty() || local.isEmpty()) return false
-        val rParts = remote.split(".").mapNotNull { it.toIntOrNull() }
-        val lParts = local.split(".").mapNotNull { it.toIntOrNull() }
+        val rClean = remote.removePrefix("v").substringBefore("-").trim()
+        val lClean = local.removePrefix("v").substringBefore("-").trim()
+        val rParts = rClean.split(".").mapNotNull { it.toIntOrNull() }
+        val lParts = lClean.split(".").mapNotNull { it.toIntOrNull() }
 
         val maxLen = maxOf(rParts.size, lParts.size)
         for (i in 0 until maxLen) {
@@ -147,32 +209,69 @@ object UpdateManager {
         return false
     }
 
-    private fun showUpdateDialog(activity: Activity, release: GithubRelease, downloadUrl: String) {
-        val notes = if (release.body.isNotBlank()) release.body else "Bản cập nhật bao gồm các cải tiến hiệu năng và sửa lỗi."
+    /**
+     * Displays a MANDATORY, NON-CANCELABLE update dialog.
+     * User cannot dismiss this dialog and must update to continue using the app.
+     */
+    private fun showMandatoryUpdateDialog(
+        activity: Activity,
+        newVersion: String,
+        releaseNotes: String,
+        downloadUrl: String
+    ) {
+        val notes = if (releaseNotes.isNotBlank()) releaseNotes else "Bản cập nhật bắt buộc: Nâng cấp bảo mật Firebase Auth, Supabase DB & Cloudinary Media."
 
-        AlertDialog.Builder(activity)
-            .setTitle("Đã có bản cập nhật mới ${release.tagName}!")
-            .setMessage("Nội dung cập nhật:\n\n$notes\n\nBạn có muốn tải và cài đặt ngay không?")
-            .setPositiveButton("Cập nhật ngay") { _, _ ->
-                if (downloadUrl.isNotEmpty()) {
-                    downloadAndInstallApk(activity, downloadUrl, "ConnectX-${release.tagName}.apk")
+        val dialog = AlertDialog.Builder(activity)
+            .setTitle("⚠️ BẮT BUỘC CẬP NHẬT PHIÊN BẢN $newVersion")
+            .setMessage(
+                "Phiên bản hiện tại (v${BuildConfig.VERSION_NAME}) đã hết hạn hỗ trợ hoặc có bản cập nhật bảo mật quan trọng.\n\n" +
+                "Bạn BẮT BUỘC phải cập nhật lên phiên bản $newVersion để tiếp tục sử dụng ứng dụng ConnectX.\n\n" +
+                "Nội dung cập nhật:\n$notes"
+            )
+            .setPositiveButton("CẬP NHẬT NGAY (BẮT BUỘC)", null) // Handled below to prevent auto-dismiss
+            .setCancelable(false)
+            .setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+                    // Back button exits the app completely
+                    activity.finishAffinity()
+                    true
                 } else {
-                    Toast.makeText(activity, "Không tìm thấy file APK đính kèm trong bản phát hành này.", Toast.LENGTH_LONG).show()
+                    false
                 }
             }
-            .setNegativeButton("Để sau", null)
-            .setCancelable(true)
+            .create()
+
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.show()
+
+        // Override positive button click to download APK
+        dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+            val actualUrl = if (downloadUrl.isNotEmpty()) {
+                downloadUrl
+            } else {
+                "${ApiClient.apiBaseUrl}/download/ConnectX-latest.apk"
+            }
+            downloadAndInstallApk(activity, actualUrl, "ConnectX-$newVersion.apk")
+        }
+    }
+
+    private fun showLatestVersionDialog(activity: Activity, currentVersion: String) {
+        AlertDialog.Builder(activity)
+            .setTitle("ConnectX đã cập nhật")
+            .setMessage("Phiên bản hiện tại: v$currentVersion\nBạn đang sử dụng phiên bản mới nhất!")
+            .setPositiveButton("OK", null)
             .show()
     }
 
     private fun downloadAndInstallApk(activity: Activity, url: String, fileName: String) {
         @Suppress("DEPRECATION")
         val progressDialog = ProgressDialog(activity).apply {
-            setTitle("Đang tải bản cập nhật...")
+            setTitle("Đang tải bản cập nhật bắt buộc...")
             setMessage("Vui lòng đợi trong giây lát...")
             setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
             max = 100
             setCancelable(false)
+            setCanceledOnTouchOutside(false)
             show()
         }
 
@@ -185,7 +284,7 @@ object UpdateManager {
             override fun onFailure(call: Call, e: IOException) {
                 mainHandler.post {
                     progressDialog.dismiss()
-                    Toast.makeText(activity, "Lỗi tải bản cập nhật: ${e.message}", Toast.LENGTH_LONG).show()
+                    showDownloadErrorDialog(activity, url, fileName, e.message ?: "Mất kết nối mạng")
                 }
             }
 
@@ -193,7 +292,7 @@ object UpdateManager {
                 if (!response.isSuccessful) {
                     mainHandler.post {
                         progressDialog.dismiss()
-                        Toast.makeText(activity, "Tải thất bại (Mã lỗi ${response.code})", Toast.LENGTH_SHORT).show()
+                        showDownloadErrorDialog(activity, url, fileName, "Mã lỗi HTTP: ${response.code}")
                     }
                     return
                 }
@@ -202,7 +301,7 @@ object UpdateManager {
                 if (body == null) {
                     mainHandler.post {
                         progressDialog.dismiss()
-                        Toast.makeText(activity, "Dữ liệu trả về rỗng", Toast.LENGTH_SHORT).show()
+                        showDownloadErrorDialog(activity, url, fileName, "Dữ liệu trả về trống")
                     }
                     return
                 }
@@ -234,11 +333,25 @@ object UpdateManager {
                 } catch (e: Exception) {
                     mainHandler.post {
                         progressDialog.dismiss()
-                        Toast.makeText(activity, "Lỗi ghi file cập nhật: ${e.message}", Toast.LENGTH_SHORT).show()
+                        showDownloadErrorDialog(activity, url, fileName, e.message ?: "Lỗi ghi file")
                     }
                 }
             }
         })
+    }
+
+    private fun showDownloadErrorDialog(activity: Activity, url: String, fileName: String, reason: String) {
+        AlertDialog.Builder(activity)
+            .setTitle("Tải bản cập nhật thất bại")
+            .setMessage("Không thể tải bản cập nhật bắt buộc: $reason.\n\nBạn phải cập nhật để tiếp tục.")
+            .setPositiveButton("Thử lại") { _, _ ->
+                downloadAndInstallApk(activity, url, fileName)
+            }
+            .setNegativeButton("Thoát ứng dụng") { _, _ ->
+                activity.finishAffinity()
+            }
+            .setCancelable(false)
+            .show()
     }
 
     private fun launchPackageInstaller(activity: Activity, file: File) {
