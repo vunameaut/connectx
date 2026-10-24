@@ -267,4 +267,73 @@
 
     </LinearLayout>
 
+    <!-- Incoming Call Floating Action Bar (Nhấc máy / Từ chối như Zalo) -->
+    <LinearLayout
+        android:id="@+id/layoutIncomingCallActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="48dp"
+        android:layout_marginHorizontal="32dp"
+        android:visibility="gone">
+
+        <!-- Decline Button -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/btnDeclineCall"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                app:fabCustomSize="68dp"
+                app:srcCompat="@drawable/ic_call_end"
+                app:tint="@color/white"
+                app:backgroundTint="@color/call_red"
+                app:elevation="6dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Từ chối"
+                android:textColor="@color/call_red"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginTop="10dp" />
+        </LinearLayout>
+
+        <!-- Accept Button -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/btnAcceptCall"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                app:fabCustomSize="68dp"
+                app:srcCompat="@drawable/ic_calls"
+                app:tint="@color/white"
+                app:backgroundTint="@color/call_green"
+                app:elevation="6dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Nhấc máy"
+                android:textColor="@color/call_green"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginTop="10dp" />
+        </LinearLayout>
+    </LinearLayout>
+
 </RelativeLayout>

@@ -124,12 +124,14 @@ class HomeActivity : AppCompatActivity() {
 
     private var friendRequestListeners: Pair<com.google.firebase.firestore.ListenerRegistration?, com.google.firebase.firestore.ListenerRegistration?>? = null
     private val conversationListeners = mutableListOf<com.google.firebase.firestore.ListenerRegistration>()
+    private var incomingCallListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     override fun onResume() {
         super.onResume()
         refreshData()
         syncFriendRequestsFromServer()
         startListeningRealtimeFriendRequests()
+        startListeningIncomingCalls()
     }
 
     override fun onPause() {
@@ -139,6 +141,26 @@ class HomeActivity : AppCompatActivity() {
         friendRequestListeners = null
         conversationListeners.forEach { it.remove() }
         conversationListeners.clear()
+        incomingCallListener?.remove()
+        incomingCallListener = null
+    }
+
+    private fun startListeningIncomingCalls() {
+        val myEmail = sessionManager.currentUser.email
+        if (myEmail.isBlank()) return
+
+        incomingCallListener?.remove()
+        incomingCallListener = com.vhn.connectx.net.FirebaseSyncManager.listenIncomingCall(myEmail) { callId, callerName, callerEmail, isVideo ->
+            // Auto open CallActivity in incoming mode
+            val intent = Intent(this, CallActivity::class.java).apply {
+                putExtra("EXTRA_CALL_ID", callId)
+                putExtra("EXTRA_CONTACT_NAME", callerName)
+                putExtra("EXTRA_CONTACT_EMAIL", callerEmail)
+                putExtra("EXTRA_IS_VIDEO", isVideo)
+                putExtra("EXTRA_IS_INCOMING", true)
+            }
+            startActivity(intent)
+        }
     }
 
     private fun startListeningRealtimeFriendRequests() {
@@ -248,7 +270,7 @@ class HomeActivity : AppCompatActivity() {
         contactAdapter = ContactAdapter(
             contacts,
             onChatClick = { contact -> openChatWithUser(contact) },
-            onCallClick = { contact -> startCall(contact.displayName, isVideo = false) },
+            onCallClick = { contact -> startCall(contact.displayName, contact.email, isVideo = false) },
             onDeleteClick = { contact -> confirmDeleteContact(contact) }
         )
         rvContacts.adapter = contactAdapter
@@ -266,7 +288,7 @@ class HomeActivity : AppCompatActivity() {
         rvCallHistory = findViewById(R.id.rvCallHistory)
         rvCallHistory.layoutManager = LinearLayoutManager(this)
         callHistoryAdapter = CallHistoryAdapter(callHistory) { item ->
-            startCall(item.contactName, item.isVideo)
+            startCall(item.contactName, isVideo = item.isVideo)
         }
         rvCallHistory.adapter = callHistoryAdapter
 
@@ -580,7 +602,7 @@ class HomeActivity : AppCompatActivity() {
             .setTitle(title)
             .setItems(names) { _, which ->
                 val selectedContact = contacts[which]
-                startCall(selectedContact.displayName, isVideo)
+                startCall(selectedContact.displayName, selectedContact.email, isVideo)
             }
             .setNegativeButton("Hủy", null)
             .show()
@@ -600,9 +622,14 @@ class HomeActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    private fun startCall(contactName: String, isVideo: Boolean) {
+    private fun startCall(contactName: String, contactEmail: String = "", isVideo: Boolean) {
+        val resolvedEmail = if (contactEmail.isNotBlank()) contactEmail else {
+            contacts.find { it.displayName.equals(contactName, ignoreCase = true) }?.email ?: ""
+        }
+
+        val callId = "call_${System.currentTimeMillis()}"
         val callItem = CallHistoryItem(
-            id = "call_${System.currentTimeMillis()}",
+            id = callId,
             contactName = contactName,
             timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
             isVideo = isVideo,
@@ -611,8 +638,11 @@ class HomeActivity : AppCompatActivity() {
         appDataStore.addCallHistory(callItem)
 
         val intent = Intent(this, CallActivity::class.java).apply {
+            putExtra("EXTRA_CALL_ID", callId)
             putExtra("EXTRA_CONTACT_NAME", contactName)
+            putExtra("EXTRA_CONTACT_EMAIL", resolvedEmail)
             putExtra("EXTRA_IS_VIDEO", isVideo)
+            putExtra("EXTRA_IS_INCOMING", false)
         }
         startActivity(intent)
     }

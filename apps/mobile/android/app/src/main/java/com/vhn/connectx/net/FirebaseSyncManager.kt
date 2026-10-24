@@ -290,4 +290,103 @@ object FirebaseSyncManager {
             null
         }
     }
+
+    /**
+     * Call Signaling: Khởi tạo cuộc gọi và gửi thông báo đổ chuông đến máy người nhận.
+     */
+    fun initiateCall(
+        callId: String,
+        callerEmail: String,
+        callerName: String,
+        calleeEmail: String,
+        isVideo: Boolean,
+        onComplete: (Boolean) -> Unit
+    ) {
+        val callData = hashMapOf(
+            "id" to callId,
+            "callerEmail" to callerEmail.trim().lowercase(),
+            "callerName" to callerName,
+            "calleeEmail" to calleeEmail.trim().lowercase(),
+            "isVideo" to isVideo,
+            "status" to "RINGING", // "RINGING", "ACCEPTED", "DECLINED", "ENDED"
+            "createdAt" to System.currentTimeMillis()
+        )
+
+        firestore.collection("active_calls")
+            .document(callId)
+            .set(callData)
+            .addOnSuccessListener { onComplete(true) }
+            .addOnFailureListener { onComplete(false) }
+    }
+
+    /**
+     * Lắng nghe cuộc gọi đến (Incoming Call) cho tài khoản hiện tại.
+     */
+    fun listenIncomingCall(
+        myEmail: String,
+        onIncomingCall: (callId: String, callerName: String, callerEmail: String, isVideo: Boolean) -> Unit
+    ): ListenerRegistration? {
+        val cleanEmail = myEmail.trim().lowercase()
+        if (cleanEmail.isBlank()) return null
+
+        return try {
+            firestore.collection("active_calls")
+                .whereEqualTo("calleeEmail", cleanEmail)
+                .whereEqualTo("status", "RINGING")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) return@addSnapshotListener
+                    for (doc in snapshot.documents) {
+                        val callId = doc.getString("id") ?: doc.id
+                        val callerName = doc.getString("callerName") ?: "Bạn bè"
+                        val callerEmail = doc.getString("callerEmail") ?: ""
+                        val isVideo = doc.getBoolean("isVideo") ?: true
+                        val createdAt = doc.getLong("createdAt") ?: 0L
+
+                        // Chỉ chấp nhận cuộc gọi trong vòng 60 giây gần nhất
+                        if (System.currentTimeMillis() - createdAt < 60000) {
+                            onIncomingCall(callId, callerName, callerEmail, isVideo)
+                            break
+                        }
+                    }
+                }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Cập nhật trạng thái cuộc gọi (ACCEPTED, DECLINED, ENDED).
+     */
+    fun updateCallStatus(callId: String, status: String, onComplete: ((Boolean) -> Unit)? = null) {
+        if (callId.isBlank()) return
+        firestore.collection("active_calls")
+            .document(callId)
+            .update("status", status)
+            .addOnSuccessListener { onComplete?.invoke(true) }
+            .addOnFailureListener { onComplete?.invoke(false) }
+    }
+
+    /**
+     * Lắng nghe trạng thái cuộc gọi hiện tại (Đang đổ chuông, Đã nhấc máy, hoặc Đã gác máy).
+     */
+    fun listenCallStatus(
+        callId: String,
+        onStatusChange: (status: String) -> Unit
+    ): ListenerRegistration? {
+        if (callId.isBlank()) return null
+        return try {
+            firestore.collection("active_calls")
+                .document(callId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                    val status = snapshot.getString("status") ?: ""
+                    if (status.isNotBlank()) {
+                        onStatusChange(status)
+                    }
+                }
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
+

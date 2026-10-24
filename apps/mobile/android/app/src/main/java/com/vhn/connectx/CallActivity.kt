@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -17,8 +19,11 @@ import androidx.appcompat.app.AppCompatActivity
 import com.connectx.screencapture.ScreenCaptureModule
 import com.connectx.screencapture.ScreenCaptureService
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.firebase.firestore.ListenerRegistration
 import com.vhn.connectx.data.AppDataStore
 import com.vhn.connectx.model.CallHistoryItem
+import com.vhn.connectx.model.SessionManager
+import com.vhn.connectx.net.FirebaseSyncManager
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,6 +37,7 @@ class CallActivity : AppCompatActivity() {
     private lateinit var layoutScreenShareBanner: LinearLayout
     private lateinit var tvScreenShareBannerText: TextView
 
+    private lateinit var callControlsBar: LinearLayout
     private lateinit var btnToggleMic: FloatingActionButton
     private lateinit var tvMicLabel: TextView
     private lateinit var btnToggleVideo: FloatingActionButton
@@ -40,11 +46,26 @@ class CallActivity : AppCompatActivity() {
     private lateinit var tvScreenShareLabel: TextView
     private lateinit var btnEndCall: FloatingActionButton
 
+    // Incoming Call Controls
+    private lateinit var layoutIncomingCallActions: LinearLayout
+    private lateinit var btnAcceptCall: FloatingActionButton
+    private lateinit var btnDeclineCall: FloatingActionButton
+
     private lateinit var screenCaptureModule: ScreenCaptureModule
+    private lateinit var sessionManager: SessionManager
 
     private var isMicMuted = false
     private var isVideoEnabled = true
     private var isScreenSharing = false
+    private var isIncoming = false
+    private var isCallAccepted = false
+
+    private var callId: String = ""
+    private var contactName: String = ""
+    private var contactEmail: String = ""
+
+    private var callStatusListener: ListenerRegistration? = null
+    private var ringtone: Ringtone? = null
 
     private var callSeconds = 0
     private val timerHandler = Handler(Looper.getMainLooper())
@@ -85,22 +106,41 @@ class CallActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Wake screen and show over lockscreen like Zalo / WhatsApp
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            )
+        }
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         setContentView(R.layout.activity_call)
 
-        val contactName = intent.getStringExtra("EXTRA_CONTACT_NAME") ?: "Bạn bè"
+        sessionManager = SessionManager(this)
+        contactName = intent.getStringExtra("EXTRA_CONTACT_NAME") ?: "Bạn bè"
+        contactEmail = intent.getStringExtra("EXTRA_CONTACT_EMAIL") ?: ""
         isVideoEnabled = intent.getBooleanExtra("EXTRA_IS_VIDEO", true)
+        isIncoming = intent.getBooleanExtra("EXTRA_IS_INCOMING", false)
+        callId = intent.getStringExtra("EXTRA_CALL_ID") ?: "call_${System.currentTimeMillis()}"
 
-        // Save real call into history
+        // Save into call history
         val callItem = CallHistoryItem(
-            id = "call_${System.currentTimeMillis()}",
+            id = callId,
             contactName = contactName,
             timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
             isVideo = isVideoEnabled,
-            isIncoming = false
+            isIncoming = isIncoming
         )
         AppDataStore.getInstance(this).addCallHistory(callItem)
 
-        initViews(contactName)
+        initViews()
         setupCallControls()
 
         screenCaptureModule = ScreenCaptureModule(applicationContext)
@@ -117,11 +157,15 @@ class CallActivity : AppCompatActivity() {
             registerReceiver(captureReceiver, filter)
         }
 
-        // Start call timer
-        timerHandler.postDelayed(timerRunnable, 1000)
+        // Setup Call Flow
+        if (isIncoming) {
+            setupIncomingCallMode()
+        } else {
+            setupOutgoingCallMode()
+        }
     }
 
-    private fun initViews(contactName: String) {
+    private fun initViews() {
         tvCallAvatar = findViewById(R.id.tvCallAvatar)
         tvCallContactName = findViewById(R.id.tvCallContactName)
         tvCallStatus = findViewById(R.id.tvCallStatus)
@@ -129,6 +173,7 @@ class CallActivity : AppCompatActivity() {
         layoutScreenShareBanner = findViewById(R.id.layoutScreenShareBanner)
         tvScreenShareBannerText = findViewById(R.id.tvScreenShareBannerText)
 
+        callControlsBar = findViewById(R.id.callControlsBar)
         btnToggleMic = findViewById(R.id.btnToggleMic)
         tvMicLabel = findViewById(R.id.tvMicLabel)
         btnToggleVideo = findViewById(R.id.btnToggleVideo)
@@ -137,9 +182,107 @@ class CallActivity : AppCompatActivity() {
         tvScreenShareLabel = findViewById(R.id.tvScreenShareLabel)
         btnEndCall = findViewById(R.id.btnEndCall)
 
+        layoutIncomingCallActions = findViewById(R.id.layoutIncomingCallActions)
+        btnAcceptCall = findViewById(R.id.btnAcceptCall)
+        btnDeclineCall = findViewById(R.id.btnDeclineCall)
+
         tvCallContactName.text = contactName
         tvCallAvatar.text = contactName.ifBlank { "U" }.take(1).uppercase()
-        tvCallStatus.text = if (isVideoEnabled) "Cuộc gọi Video HD • Bảo mật E2E" else "Cuộc gọi Thoại • Bảo mật E2E"
+    }
+
+    private fun setupOutgoingCallMode() {
+        tvCallStatus.text = "Đang gọi..."
+        tvCallTimer.text = "Đang kết nối..."
+        callControlsBar.visibility = View.VISIBLE
+        layoutIncomingCallActions.visibility = View.GONE
+
+        // Send initiateCall to Firestore
+        val myUser = sessionManager.currentUser
+        if (contactEmail.isNotBlank()) {
+            FirebaseSyncManager.initiateCall(
+                callId = callId,
+                callerEmail = myUser.email,
+                callerName = myUser.displayName,
+                calleeEmail = contactEmail,
+                isVideo = isVideoEnabled
+            ) {}
+        }
+
+        // Listen for recipient response
+        listenCallStatusUpdates()
+    }
+
+    private fun setupIncomingCallMode() {
+        tvCallStatus.text = if (isVideoEnabled) "Cuộc gọi video đến..." else "Cuộc gọi thoại đến..."
+        tvCallTimer.text = "Đang đổ chuông..."
+        callControlsBar.visibility = View.GONE
+        layoutIncomingCallActions.visibility = View.VISIBLE
+
+        // Play standard incoming ringtone
+        try {
+            val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            ringtone = RingtoneManager.getRingtone(applicationContext, ringtoneUri)
+            ringtone?.play()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        btnAcceptCall.setOnClickListener {
+            ringtone?.stop()
+            isCallAccepted = true
+            FirebaseSyncManager.updateCallStatus(callId, "ACCEPTED")
+            onCallConnected()
+        }
+
+        btnDeclineCall.setOnClickListener {
+            ringtone?.stop()
+            FirebaseSyncManager.updateCallStatus(callId, "DECLINED")
+            Toast.makeText(this, "Đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
+            finish()
+        }
+
+        // Listen if caller hangs up before answering
+        listenCallStatusUpdates()
+    }
+
+    private fun listenCallStatusUpdates() {
+        callStatusListener?.remove()
+        callStatusListener = FirebaseSyncManager.listenCallStatus(callId) { status ->
+            when (status) {
+                "ACCEPTED" -> {
+                    if (!isCallAccepted) {
+                        onCallConnected()
+                    }
+                }
+                "DECLINED" -> {
+                    ringtone?.stop()
+                    tvCallStatus.text = "Đối phương bận máy"
+                    Toast.makeText(this, "Đối phương đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
+                    Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
+                }
+                "ENDED" -> {
+                    ringtone?.stop()
+                    tvCallStatus.text = "Cuộc gọi đã kết thúc"
+                    timerHandler.removeCallbacks(timerRunnable)
+                    Toast.makeText(this, "Cuộc gọi đã kết thúc", Toast.LENGTH_SHORT).show()
+                    Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1000)
+                }
+            }
+        }
+    }
+
+    private fun onCallConnected() {
+        isCallAccepted = true
+        ringtone?.stop()
+        callControlsBar.visibility = View.VISIBLE
+        layoutIncomingCallActions.visibility = View.GONE
+        tvCallStatus.text = if (isVideoEnabled) "Đã kết nối • Video HD (WebRTC TURN)" else "Đã kết nối • Thoại HD (WebRTC)"
+
+        // Start call timer when answered (nhấc máy thì đếm giờ)
+        callSeconds = 0
+        tvCallTimer.text = "00:00"
+        timerHandler.removeCallbacks(timerRunnable)
+        timerHandler.postDelayed(timerRunnable, 1000)
     }
 
     private fun setupCallControls() {
@@ -211,16 +354,20 @@ class CallActivity : AppCompatActivity() {
     }
 
     private fun endCall() {
+        ringtone?.stop()
         if (isScreenSharing) {
             screenCaptureModule.stopCapture()
         }
         timerHandler.removeCallbacks(timerRunnable)
+        FirebaseSyncManager.updateCallStatus(callId, "ENDED")
         Toast.makeText(this, "Cuộc gọi đã kết thúc", Toast.LENGTH_SHORT).show()
         finish()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        ringtone?.stop()
+        callStatusListener?.remove()
         timerHandler.removeCallbacks(timerRunnable)
         try {
             unregisterReceiver(captureReceiver)

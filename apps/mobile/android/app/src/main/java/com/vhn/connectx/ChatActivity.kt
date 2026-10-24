@@ -143,8 +143,9 @@ class ChatActivity : AppCompatActivity() {
         btnBack.setOnClickListener { finish() }
 
         btnChatVoiceCall.setOnClickListener {
+            val callId = "call_${System.currentTimeMillis()}"
             val callItem = CallHistoryItem(
-                id = "call_${System.currentTimeMillis()}",
+                id = callId,
                 contactName = contactTitle,
                 timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
                 isVideo = false,
@@ -153,15 +154,19 @@ class ChatActivity : AppCompatActivity() {
             appDataStore.addCallHistory(callItem)
 
             val intent = Intent(this, CallActivity::class.java).apply {
+                putExtra("EXTRA_CALL_ID", callId)
                 putExtra("EXTRA_CONTACT_NAME", contactTitle)
+                putExtra("EXTRA_CONTACT_EMAIL", contactEmail)
                 putExtra("EXTRA_IS_VIDEO", false)
+                putExtra("EXTRA_IS_INCOMING", false)
             }
             startActivity(intent)
         }
 
         btnChatVideoCall.setOnClickListener {
+            val callId = "call_${System.currentTimeMillis()}"
             val callItem = CallHistoryItem(
-                id = "call_${System.currentTimeMillis()}",
+                id = callId,
                 contactName = contactTitle,
                 timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
                 isVideo = true,
@@ -170,8 +175,11 @@ class ChatActivity : AppCompatActivity() {
             appDataStore.addCallHistory(callItem)
 
             val intent = Intent(this, CallActivity::class.java).apply {
+                putExtra("EXTRA_CALL_ID", callId)
                 putExtra("EXTRA_CONTACT_NAME", contactTitle)
+                putExtra("EXTRA_CONTACT_EMAIL", contactEmail)
                 putExtra("EXTRA_IS_VIDEO", true)
+                putExtra("EXTRA_IS_INCOMING", false)
             }
             startActivity(intent)
         }
