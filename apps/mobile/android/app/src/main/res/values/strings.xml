@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ConnectX</string>
+    <string name="app_slogan">Nhắn tin, Gọi điện &amp; Chia sẻ màn hình</string>
+    <string name="login_with_google">Đăng nhập bằng Google</string>
+    <string name="login_as_guest">Dùng thử nhanh (Demo User)</string>
+    <string name="tab_chats">Tin nhắn</string>
+    <string name="tab_contacts">Danh bạ</string>
+    <string name="tab_calls">Cuộc gọi</string>
+    <string name="tab_profile">Cá nhân</string>
+    <string name="search_hint">Tìm kiếm bạn bè, tin nhắn...</string>
+    <string name="type_message_hint">Nhập tin nhắn...</string>
+    <string name="voice_call">Gọi thoại</string>
+    <string name="video_call">Gọi video</string>
+    <string name="screen_share">Chia sẻ màn hình</string>
+    <string name="end_call">Kết thúc</string>
+    <string name="mute_mic">Tắt mic</string>
+    <string name="unmute_mic">Bật mic</string>
+    <string name="turn_off_video">Tắt camera</string>
+    <string name="turn_on_video">Bật camera</string>
+    <string name="add_friend">Thêm bạn</string>
+    <string name="status_online">Đang hoạt động</string>
+    <string name="status_offline">Offline</string>
+</resources>

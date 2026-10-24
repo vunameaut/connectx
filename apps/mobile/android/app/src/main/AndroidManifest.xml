@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.vhn.connectx">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Permissions for Network, Audio & Video -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -13,6 +12,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name=".MainApplication"
         android:label="ConnectX"
@@ -20,15 +21,39 @@
         android:allowBackup="false"
         android:theme="@style/AppTheme">
 
+        <!-- Login Activity (Launcher) -->
         <activity
-            android:name=".MainActivity"
+            android:name=".LoginActivity"
             android:exported="true"
-            android:launchMode="singleTask">
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Home Activity (Main Dashboard: Chats, Contacts, Calls, Profile) -->
+        <activity
+            android:name=".HomeActivity"
+            android:exported="false"
+            android:launchMode="singleTask" />
+
+        <!-- Direct Chat Activity -->
+        <activity
+            android:name=".ChatActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Call Activity (Voice, Video & Screen Sharing) -->
+        <activity
+            android:name=".CallActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Legacy / Diagnostic Test Center -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="false" />
 
         <!-- Screen Capture Foreground Service (Complies with Android 14+ FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION) -->
         <service
@@ -36,6 +61,17 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- FileProvider for installing downloaded APK updates -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

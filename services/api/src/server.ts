@@ -36,6 +36,19 @@ export async function buildServer(): Promise<FastifyInstance> {
     };
   });
 
+  // App Version & In-App Auto-Update Endpoint
+  server.get('/api/v1/app/version', async () => {
+    return {
+      versionCode: 1,
+      versionName: '1.0.0',
+      minSupportedVersion: '1.0.0',
+      updateRequired: false,
+      releaseNotes: 'Bản phát hành chính thức ConnectX với tính năng Chat, Cuộc gọi & Chia sẻ màn hình.',
+      downloadUrl: 'https://github.com/vhn/connectx/releases/latest',
+      publishedAt: '2026-10-24T16:00:00Z',
+    };
+  });
+
   // 1. Auth Bridge: Exchange Firebase ID Token for Supabase Custom JWT
   const exchangeTokenSchema = z.object({
     idToken: z.string().min(1, 'idToken is required'),

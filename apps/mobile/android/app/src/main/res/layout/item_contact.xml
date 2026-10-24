@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingVertical="12dp"
+    android:paddingHorizontal="16dp"
+    android:background="?android:attr/selectableItemBackground">
+
+    <!-- Avatar -->
+    <TextView
+        android:id="@+id/tvContactAvatar"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/bg_card_secondary"
+        android:text="B"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="center" />
+
+    <!-- Name & Status -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="14dp">
+
+        <TextView
+            android:id="@+id/tvContactName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Trần Thị B"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvContactEmail"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="b.tran@example.com"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+    <!-- Quick Action: Chat -->
+    <ImageView
+        android:id="@+id/btnQuickChat"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:padding="6dp"
+        android:src="@drawable/ic_chat"
+        app:tint="@color/colorPrimary"
+        android:contentDescription="Nhắn tin" />
+
+    <!-- Quick Action: Call -->
+    <ImageView
+        android:id="@+id/btnQuickCall"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:padding="6dp"
+        android:layout_marginStart="8dp"
+        android:src="@drawable/ic_calls"
+        app:tint="@color/call_green"
+        android:contentDescription="Gọi điện" />
+
+</LinearLayout>

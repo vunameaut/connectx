@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_dark">
+
+    <!-- Video / Screen Share View Placeholder -->
+    <FrameLayout
+        android:id="@+id/videoContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#0A0F1D">
+
+        <!-- Screen Share Active Banner -->
+        <LinearLayout
+            android:id="@+id/layoutScreenShareBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#CCDC2626"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/ic_screenshare"
+                app:tint="@color/white" />
+
+            <TextView
+                android:id="@+id/tvScreenShareBannerText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="ĐANG CHIA SẺ MÀN HÌNH (Foreground Service)"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Caller / Callee Header -->
+    <LinearLayout
+        android:id="@+id/callHeaderLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginTop="64dp"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/tvCallAvatar"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:background="@drawable/bg_card_secondary"
+            android:text="B"
+            android:textColor="@color/white"
+            android:textSize="40sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/tvCallContactName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bạn bè ConnectX"
+            android:textColor="@color/text_primary"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp" />
+
+        <TextView
+            android:id="@+id/tvCallStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Đang gọi WebRTC..."
+            android:textColor="@color/colorAccent"
+            android:textSize="15sp"
+            android:layout_marginTop="6dp" />
+
+        <TextView
+            android:id="@+id/tvCallTimer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- Call Controls Bar at Bottom -->
+    <LinearLayout
+        android:id="@+id/callControlsBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="48dp"
+        android:paddingHorizontal="16dp">
+
+        <!-- Mic Mute Toggle -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/btnToggleMic"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                app:fabCustomSize="56dp"
+                app:srcCompat="@drawable/ic_mic"
+                app:tint="@color/white"
+                app:backgroundTint="@color/bg_card_secondary"
+                android:contentDescription="@string/mute_mic" />
+
+            <TextView
+                android:id="@+id/tvMicLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mic"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+
+        <!-- Video Camera Toggle -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/btnToggleVideo"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                app:fabCustomSize="56dp"
+                app:srcCompat="@drawable/ic_videocall"
+                app:tint="@color/white"
+                app:backgroundTint="@color/bg_card_secondary"
+                android:contentDescription="@string/turn_off_video" />
+
+            <TextView
+                android:id="@+id/tvVideoLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Camera"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+
+        <!-- SCREEN SHARE Toggle (Connected to Android 14+ MediaProjection) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/btnToggleScreenShare"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                app:fabCustomSize="56dp"
+                app:srcCompat="@drawable/ic_screenshare"
+                app:tint="@color/white"
+                app:backgroundTint="@color/colorPrimary"
+                android:contentDescription="@string/screen_share" />
+
+            <TextView
+                android:id="@+id/tvScreenShareLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Chia sẻ"
+                android:textColor="@color/colorAccent"
+                android:textSize="11sp"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+
+        <!-- End Call Button -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/btnEndCall"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                app:fabCustomSize="56dp"
+                app:srcCompat="@drawable/ic_call_end"
+                app:tint="@color/white"
+                app:backgroundTint="@color/call_red"
+                android:contentDescription="@string/end_call" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Kết thúc"
+                android:textColor="@color/call_red"
+                android:textSize="11sp"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="top"
+    android:paddingVertical="4dp"
+    android:paddingStart="8dp"
+    android:paddingEnd="64dp">
+
+    <TextView
+        android:id="@+id/tvMessageOtherAvatar"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:background="@drawable/bg_card_secondary"
+        android:text="B"
+        android:textColor="@color/white"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginTop="2dp" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_message_other"
+        android:paddingVertical="10dp"
+        android:paddingHorizontal="14dp"
+        android:layout_marginStart="8dp">
+
+        <TextView
+            android:id="@+id/tvMessageTextOther"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Được chứ, mình đang bật chức năng chia sẻ màn hình qua cuộc gọi video đây."
+            android:textColor="@color/text_primary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/tvMessageTimeOther"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginTop="4dp"
+            android:text="14:33"
+            android:textColor="@color/text_muted"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+</LinearLayout>
