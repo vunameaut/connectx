@@ -73,113 +73,131 @@
         android:layout_weight="1">
 
         <!-- Tab 1: Chats Layout -->
-        <LinearLayout
+        <FrameLayout
             android:id="@+id/viewChats"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical"
             android:visibility="visible">
 
-            <!-- Horizontal Active Stories Row -->
             <LinearLayout
-                android:id="@+id/layoutStoriesRow"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:paddingTop="12dp"
-                android:paddingBottom="8dp"
-                android:background="@color/bg_dark"
-                android:visibility="gone">
+                android:layout_height="match_parent"
+                android:orientation="vertical">
 
+                <!-- Horizontal Active Stories Row -->
+                <LinearLayout
+                    android:id="@+id/layoutStoriesRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="8dp"
+                    android:background="@color/bg_dark"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="BẠN BÈ TRỰC TUYẾN"
+                        android:textColor="@color/text_muted"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.08"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginBottom="8dp" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rvOnlineStories"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:clipToPadding="false"
+                        android:paddingHorizontal="12dp" />
+                </LinearLayout>
+
+                <!-- Empty Chats State -->
+                <LinearLayout
+                    android:id="@+id/layoutEmptyChats"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="32dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="72dp"
+                        android:layout_height="72dp"
+                        android:src="@drawable/ic_chat"
+                        app:tint="@color/text_muted"
+                        android:alpha="0.4"
+                        android:contentDescription="Empty Chats" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Chưa có cuộc trò chuyện nào"
+                        android:textColor="@color/text_primary"
+                        android:textSize="17sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="16dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Hãy kết bạn mới và bắt đầu trò chuyện ngay bây giờ!"
+                        android:textColor="@color/text_muted"
+                        android:textSize="13sp"
+                        android:gravity="center"
+                        android:layout_marginTop="6dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnEmptyChatAddFriend"
+                        android:layout_width="wrap_content"
+                        android:layout_height="46dp"
+                        android:layout_marginTop="20dp"
+                        android:text="Tìm &amp; Kết bạn mới"
+                        android:textSize="13sp"
+                        app:cornerRadius="23dp"
+                        app:backgroundTint="@color/colorPrimary" />
+                </LinearLayout>
+
+                <!-- Conversations List Header -->
                 <TextView
+                    android:id="@+id/tvRecentChatsHeader"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="BẠN BÈ TRỰC TUYẾN"
+                    android:text="TIN NHẮN GẦN ĐÂY"
                     android:textColor="@color/text_muted"
                     android:textSize="11sp"
                     android:textStyle="bold"
                     android:letterSpacing="0.08"
                     android:layout_marginStart="16dp"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="4dp" />
 
+                <!-- Conversations List -->
                 <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rvOnlineStories"
+                    android:id="@+id/rvConversations"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
+                    android:layout_height="match_parent"
                     android:clipToPadding="false"
-                    android:paddingHorizontal="12dp" />
+                    android:paddingBottom="80dp" />
             </LinearLayout>
 
-            <!-- Empty Chats State -->
-            <LinearLayout
-                android:id="@+id/layoutEmptyChats"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="32dp"
-                android:visibility="gone">
-
-                <ImageView
-                    android:layout_width="72dp"
-                    android:layout_height="72dp"
-                    android:src="@drawable/ic_chat"
-                    app:tint="@color/text_muted"
-                    android:alpha="0.4"
-                    android:contentDescription="Empty Chats" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Chưa có cuộc trò chuyện nào"
-                    android:textColor="@color/text_primary"
-                    android:textSize="17sp"
-                    android:textStyle="bold"
-                    android:layout_marginTop="16dp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Hãy kết bạn mới và bắt đầu trò chuyện ngay bây giờ!"
-                    android:textColor="@color/text_muted"
-                    android:textSize="13sp"
-                    android:gravity="center"
-                    android:layout_marginTop="6dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnEmptyChatAddFriend"
-                    android:layout_width="wrap_content"
-                    android:layout_height="46dp"
-                    android:layout_marginTop="20dp"
-                    android:text="Tìm &amp; Kết bạn mới"
-                    android:textSize="13sp"
-                    app:cornerRadius="23dp"
-                    app:backgroundTint="@color/colorPrimary" />
-            </LinearLayout>
-
-            <!-- Conversations List Header -->
-            <TextView
-                android:id="@+id/tvRecentChatsHeader"
+            <!-- Floating Action Button: New Chat -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabNewChat"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="TIN NHẮN GẦN ĐÂY"
-                android:textColor="@color/text_muted"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.08"
-                android:layout_marginStart="16dp"
-                android:layout_marginTop="12dp"
-                android:layout_marginBottom="4dp" />
-
-            <!-- Conversations List -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rvConversations"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:paddingBottom="16dp" />
-        </LinearLayout>
+                android:layout_gravity="bottom|end"
+                android:layout_margin="20dp"
+                app:srcCompat="@drawable/ic_chat"
+                app:tint="@color/white"
+                app:backgroundTint="@color/colorPrimary"
+                app:elevation="6dp"
+                android:contentDescription="Soạn tin nhắn mới" />
+        </FrameLayout>
 
         <!-- Tab 2: Contacts Layout -->
         <LinearLayout
@@ -216,7 +234,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Kết bạn mới qua Email"
+                        android:text="Gửi lời mời kết bạn qua Email"
                         android:textColor="@color/text_primary"
                         android:textSize="15sp"
                         android:textStyle="bold" />
@@ -224,7 +242,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Nhập email để thêm vào danh bạ và gọi video"
+                        android:text="Gửi lời mời và cùng trò chuyện khi đối phương đồng ý"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp"
                         android:layout_marginTop="2dp" />
@@ -234,10 +252,58 @@
                     android:id="@+id/btnQuickAddFriend"
                     android:layout_width="wrap_content"
                     android:layout_height="40dp"
-                    android:text="Thêm bạn"
+                    android:text="Kết bạn"
                     android:textSize="13sp"
                     app:cornerRadius="20dp"
                     app:backgroundTint="@color/colorPrimary" />
+            </LinearLayout>
+
+            <!-- Pending Friend Requests Section -->
+            <LinearLayout
+                android:id="@+id/layoutPendingRequests"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:layout_marginBottom="10dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="4dp">
+
+                    <TextView
+                        android:id="@+id/tvPendingRequestsTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="LỜI MỜI KẾT BẠN ĐANG CHỜ"
+                        android:textColor="@color/colorPrimaryLight"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.08" />
+
+                    <TextView
+                        android:id="@+id/tvPendingCountBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_badge"
+                        android:text="1"
+                        android:textColor="@color/white"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:paddingHorizontal="8dp"
+                        android:paddingVertical="2dp" />
+                </LinearLayout>
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvFriendRequests"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
             </LinearLayout>
 
             <!-- Empty Contacts State -->
@@ -270,7 +336,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Bấm 'Thêm bạn' ở trên để kết nối với người quen ngay lập tức."
+                    android:text="Bấm 'Kết bạn' ở trên để gửi lời mời kết nối tới bạn bè."
                     android:textColor="@color/text_muted"
                     android:textSize="13sp"
                     android:gravity="center"
@@ -533,6 +599,42 @@
                             android:layout_height="wrap_content"
                             android:text="v1.0.1"
                             android:textColor="@color/text_muted"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/divider"
+                        android:layout_marginVertical="6dp" />
+
+                    <!-- Server API Config Option -->
+                    <LinearLayout
+                        android:id="@+id/btnServerConfig"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="12dp"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:background="?attr/selectableItemBackground">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Máy chủ Đồng bộ &amp; Cuộc gọi"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvCurrentServerHost"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Mặc định"
+                            android:textColor="@color/colorPrimary"
                             android:textSize="13sp" />
                     </LinearLayout>
                 </LinearLayout>

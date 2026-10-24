@@ -356,6 +356,109 @@ export async function buildServer(): Promise<FastifyInstance> {
     return reply.status(200).send(iceServers);
   });
 
+  // In-Memory Sync Store for Cross-Device Real-Time Messaging & Friend Requests
+  interface SyncMessage {
+    id: string;
+    conversationId: string;
+    senderId: string;
+    senderName: string;
+    text: string;
+    timestamp: string;
+    isMe?: boolean;
+    mediaUrl?: string | null;
+    messageType?: string;
+  }
+
+  interface SyncFriendRequest {
+    id: string;
+    senderId: string;
+    senderName: string;
+    senderEmail: string;
+    receiverEmail: string;
+    timestamp: string;
+    status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  }
+
+  const syncMessagesStore = new Map<string, SyncMessage[]>();
+  const syncFriendRequestsStore: SyncFriendRequest[] = [];
+
+  // Friend Requests Sync Endpoints
+  server.get('/api/v1/sync/friend-requests', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { email } = request.query as { email?: string };
+    if (!email) {
+      return reply.status(200).send({ requests: syncFriendRequestsStore });
+    }
+    const filtered = syncFriendRequestsStore.filter(
+      (r) => r.receiverEmail.toLowerCase() === email.toLowerCase() || r.senderEmail.toLowerCase() === email.toLowerCase()
+    );
+    return reply.status(200).send({ requests: filtered });
+  });
+
+  server.post('/api/v1/sync/friend-requests', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = request.body as Partial<SyncFriendRequest>;
+    if (!body.senderEmail || !body.receiverEmail) {
+      return reply.status(400).send({ error: 'VALIDATION_ERROR', message: 'Missing senderEmail or receiverEmail' });
+    }
+
+    const newReq: SyncFriendRequest = {
+      id: body.id || `fr_${Date.now()}`,
+      senderId: body.senderId || 'sender_id',
+      senderName: body.senderName || body.senderEmail.split('@')[0] || 'User',
+      senderEmail: body.senderEmail,
+      receiverEmail: body.receiverEmail,
+      timestamp: body.timestamp || new Date().toISOString(),
+      status: 'PENDING',
+    };
+
+    const existingIdx = syncFriendRequestsStore.findIndex(
+      (r) =>
+        r.senderEmail.toLowerCase() === newReq.senderEmail.toLowerCase() &&
+        r.receiverEmail.toLowerCase() === newReq.receiverEmail.toLowerCase() &&
+        r.status === 'PENDING'
+    );
+
+    if (existingIdx >= 0) {
+      syncFriendRequestsStore[existingIdx] = newReq;
+    } else {
+      syncFriendRequestsStore.unshift(newReq);
+    }
+
+    return reply.status(201).send({ success: true, request: newReq });
+  });
+
+  server.post('/api/v1/sync/friend-requests/:id/respond', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const { status } = request.body as { status: 'ACCEPTED' | 'REJECTED' };
+    const req = syncFriendRequestsStore.find((r) => r.id === id);
+    if (!req) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Friend request not found' });
+    }
+    req.status = status;
+    return reply.status(200).send({ success: true, request: req });
+  });
+
+  // Messages Real-Time Sync Endpoints
+  server.get('/api/v1/sync/messages/:conversationId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { conversationId } = request.params as { conversationId: string };
+    const list = syncMessagesStore.get(conversationId) || [];
+    return reply.status(200).send({ messages: list });
+  });
+
+  server.post('/api/v1/sync/messages/:conversationId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { conversationId } = request.params as { conversationId: string };
+    const msg = request.body as SyncMessage;
+    if (!msg || !msg.id || !msg.senderId) {
+      return reply.status(400).send({ error: 'VALIDATION_ERROR', message: 'Invalid message payload' });
+    }
+
+    const currentList = syncMessagesStore.get(conversationId) || [];
+    if (!currentList.some((m) => m.id === msg.id)) {
+      currentList.push(msg);
+      syncMessagesStore.set(conversationId, currentList);
+    }
+    return reply.status(201).send({ success: true, message: msg });
+  });
+
   return server;
 }
 

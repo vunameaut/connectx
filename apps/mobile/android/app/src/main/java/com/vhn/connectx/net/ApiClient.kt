@@ -218,4 +218,171 @@ object ApiClient {
             }
         })
     }
+
+    fun getBaseUrl(context: Context): String {
+        val custom = com.vhn.connectx.data.AppDataStore.getInstance(context).customServerHost
+        return if (!custom.isNullOrBlank()) custom.trim().removeSuffix("/") else apiBaseUrl
+    }
+
+    /**
+     * Synchronize Friend Requests from backend server.
+     */
+    fun syncFriendRequests(
+        context: Context,
+        myEmail: String,
+        onComplete: (List<com.vhn.connectx.model.FriendRequest>) -> Unit
+    ) {
+        val baseUrl = getBaseUrl(context)
+        val url = "$baseUrl/api/v1/sync/friend-requests?email=${java.net.URLEncoder.encode(myEmail, "UTF-8")}"
+        val request = Request.Builder().url(url).get().build()
+
+        httpClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                mainHandler.post { onComplete(emptyList()) }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val body = response.body?.string()
+                if (response.isSuccessful && !body.isNullOrEmpty()) {
+                    try {
+                        val obj = gson.fromJson(body, Map::class.java)
+                        val rawList = obj["requests"]
+                        val json = gson.toJson(rawList)
+                        val type = object : com.google.gson.reflect.TypeToken<List<com.vhn.connectx.model.FriendRequest>>() {}.type
+                        val list: List<com.vhn.connectx.model.FriendRequest> = gson.fromJson(json, type) ?: emptyList()
+                        mainHandler.post { onComplete(list) }
+                        return
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed parsing friend requests sync", e)
+                    }
+                }
+                mainHandler.post { onComplete(emptyList()) }
+            }
+        })
+    }
+
+    /**
+     * Send Friend Request to backend server.
+     */
+    fun sendFriendRequest(
+        context: Context,
+        req: com.vhn.connectx.model.FriendRequest,
+        onComplete: (Boolean) -> Unit
+    ) {
+        val baseUrl = getBaseUrl(context)
+        val url = "$baseUrl/api/v1/sync/friend-requests"
+        val payload = gson.toJson(req)
+        val request = Request.Builder()
+            .url(url)
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        httpClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                mainHandler.post { onComplete(false) }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                mainHandler.post { onComplete(response.isSuccessful) }
+            }
+        })
+    }
+
+    /**
+     * Respond to Friend Request on backend server.
+     */
+    fun respondFriendRequest(
+        context: Context,
+        reqId: String,
+        status: String,
+        onComplete: (Boolean) -> Unit
+    ) {
+        val baseUrl = getBaseUrl(context)
+        val url = "$baseUrl/api/v1/sync/friend-requests/$reqId/respond"
+        val payload = gson.toJson(mapOf("status" to status))
+        val request = Request.Builder()
+            .url(url)
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        httpClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                mainHandler.post { onComplete(false) }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                mainHandler.post { onComplete(response.isSuccessful) }
+            }
+        })
+    }
+
+    /**
+     * Fetch Messages for a conversation from backend server.
+     */
+    fun syncMessages(
+        context: Context,
+        convId: String,
+        currentUserId: String,
+        onComplete: (List<com.vhn.connectx.model.Message>) -> Unit
+    ) {
+        val baseUrl = getBaseUrl(context)
+        val url = "$baseUrl/api/v1/sync/messages/$convId"
+        val request = Request.Builder().url(url).get().build()
+
+        httpClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                mainHandler.post { onComplete(emptyList()) }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val body = response.body?.string()
+                if (response.isSuccessful && !body.isNullOrEmpty()) {
+                    try {
+                        val obj = gson.fromJson(body, Map::class.java)
+                        val rawList = obj["messages"]
+                        val json = gson.toJson(rawList)
+                        val type = object : com.google.gson.reflect.TypeToken<List<com.vhn.connectx.model.Message>>() {}.type
+                        val list: List<com.vhn.connectx.model.Message> = gson.fromJson(json, type) ?: emptyList()
+                        // Ensure isMe is accurately evaluated for the current user
+                        val adjusted = list.map { msg ->
+                            msg.copy(isMe = (msg.senderId == currentUserId))
+                        }
+                        mainHandler.post { onComplete(adjusted) }
+                        return
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed parsing sync messages", e)
+                    }
+                }
+                mainHandler.post { onComplete(emptyList()) }
+            }
+        })
+    }
+
+    /**
+     * Send Message to backend server.
+     */
+    fun sendMessageToServer(
+        context: Context,
+        convId: String,
+        message: com.vhn.connectx.model.Message,
+        onComplete: (Boolean) -> Unit
+    ) {
+        val baseUrl = getBaseUrl(context)
+        val url = "$baseUrl/api/v1/sync/messages/$convId"
+        val payload = gson.toJson(message)
+        val request = Request.Builder()
+            .url(url)
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        httpClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                mainHandler.post { onComplete(false) }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                mainHandler.post { onComplete(response.isSuccessful) }
+            }
+        })
+    }
 }

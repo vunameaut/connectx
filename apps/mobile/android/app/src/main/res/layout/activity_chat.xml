@@ -158,22 +158,34 @@
         <!-- Emoji Button -->
         <ImageView
             android:id="@+id/btnEmoji"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:padding="8dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:padding="6dp"
             android:src="@drawable/ic_emoji"
             app:tint="@color/text_secondary"
             android:contentDescription="Emoji" />
 
-        <!-- Attachment / Image Button -->
+        <!-- Pick Image Button -->
         <ImageView
-            android:id="@+id/btnAttachment"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:padding="8dp"
+            android:id="@+id/btnPickImage"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:padding="6dp"
+            android:layout_marginStart="2dp"
             android:src="@drawable/ic_image"
+            app:tint="@color/colorPrimary"
+            android:contentDescription="Chọn ảnh từ máy" />
+
+        <!-- Camera Button -->
+        <ImageView
+            android:id="@+id/btnCamera"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:padding="6dp"
+            android:layout_marginStart="2dp"
+            android:src="@drawable/ic_camera"
             app:tint="@color/text_secondary"
-            android:contentDescription="Gửi ảnh" />
+            android:contentDescription="Chụp ảnh nhanh" />
 
         <!-- Input Field Container -->
         <LinearLayout
@@ -184,8 +196,8 @@
             android:background="@drawable/bg_input_box"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="14dp"
-            android:paddingVertical="4dp">
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="2dp">
 
             <EditText
                 android:id="@+id/etMessageInput"
@@ -204,11 +216,11 @@
             <!-- Mic Voice Record Icon inside Input -->
             <ImageView
                 android:id="@+id/btnVoiceRecord"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:padding="4dp"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="6dp"
                 android:src="@drawable/ic_voice_record"
-                app:tint="@color/text_muted"
+                app:tint="@color/text_secondary"
                 android:contentDescription="Ghi âm thoại" />
         </LinearLayout>
 

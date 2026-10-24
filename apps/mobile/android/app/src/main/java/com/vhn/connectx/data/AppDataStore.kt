@@ -7,6 +7,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.vhn.connectx.model.CallHistoryItem
 import com.vhn.connectx.model.Conversation
+import com.vhn.connectx.model.FriendRequest
 import com.vhn.connectx.model.Message
 import com.vhn.connectx.model.User
 
@@ -17,10 +18,12 @@ class AppDataStore(context: Context) {
 
     companion object {
         private const val KEY_CONTACTS = "key_contacts"
+        private const val KEY_FRIEND_REQUESTS = "key_friend_requests"
         private const val KEY_CONVERSATIONS = "key_conversations"
         private const val KEY_MESSAGES_PREFIX = "key_messages_"
         private const val KEY_CALL_HISTORY = "key_call_history"
         private const val KEY_THEME_MODE = "key_theme_mode"
+        private const val KEY_SERVER_API_HOST = "key_server_api_host"
 
         @Volatile
         private var instance: AppDataStore? = null
@@ -59,8 +62,101 @@ class AppDataStore(context: Context) {
         saveContacts(list)
     }
 
-    private fun saveContacts(list: List<User>) {
+    fun saveContacts(list: List<User>) {
         prefs.edit().putString(KEY_CONTACTS, gson.toJson(list)).apply()
+    }
+
+    // --- FRIEND REQUESTS ---
+    fun getFriendRequests(): MutableList<FriendRequest> {
+        val json = prefs.getString(KEY_FRIEND_REQUESTS, null) ?: return mutableListOf()
+        val type = object : TypeToken<MutableList<FriendRequest>>() {}.type
+        return try {
+            gson.fromJson(json, type) ?: mutableListOf()
+        } catch (e: Exception) {
+            mutableListOf()
+        }
+    }
+
+    fun saveFriendRequests(list: List<FriendRequest>) {
+        prefs.edit().putString(KEY_FRIEND_REQUESTS, gson.toJson(list)).apply()
+    }
+
+    fun sendFriendRequest(req: FriendRequest): Boolean {
+        val list = getFriendRequests()
+        val exists = list.any {
+            it.senderEmail.equals(req.senderEmail, ignoreCase = true) &&
+            it.receiverEmail.equals(req.receiverEmail, ignoreCase = true) &&
+            it.status == "PENDING"
+        }
+        if (exists) return false
+        list.add(0, req)
+        saveFriendRequests(list)
+        return true
+    }
+
+    fun acceptFriendRequest(requestId: String, myUser: User): User? {
+        val list = getFriendRequests()
+        val index = list.indexOfFirst { it.id == requestId }
+        if (index == -1) return null
+
+        val req = list[index]
+        val updated = req.copy(status = "ACCEPTED")
+        list[index] = updated
+        saveFriendRequests(list)
+
+        // Determine the other party's user object
+        val otherUser = if (req.senderEmail.equals(myUser.email, ignoreCase = true)) {
+            User(
+                id = "u_${System.currentTimeMillis()}",
+                displayName = req.receiverEmail.substringBefore("@"),
+                email = req.receiverEmail,
+                isOnline = true
+            )
+        } else {
+            User(
+                id = req.senderId.ifBlank { "u_${System.currentTimeMillis()}" },
+                displayName = req.senderName.ifBlank { req.senderEmail.substringBefore("@") },
+                email = req.senderEmail,
+                isOnline = true
+            )
+        }
+
+        // Add to contacts
+        addContact(otherUser)
+
+        // Automatically create a welcoming conversation
+        val convId = getDirectConvId(myUser.email, otherUser.email)
+        updateConversation(
+            convId = convId,
+            title = otherUser.displayName,
+            lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
+            timestamp = "Vừa xong"
+        )
+
+        return otherUser
+    }
+
+    fun rejectFriendRequest(requestId: String): Boolean {
+        val list = getFriendRequests()
+        val index = list.indexOfFirst { it.id == requestId }
+        if (index == -1) return false
+        val req = list[index]
+        list[index] = req.copy(status = "REJECTED")
+        saveFriendRequests(list)
+        return true
+    }
+
+    fun getPendingRequestsFor(userEmail: String): List<FriendRequest> {
+        return getFriendRequests().filter {
+            it.receiverEmail.equals(userEmail, ignoreCase = true) && it.status == "PENDING"
+        }
+    }
+
+    // Direct Conversation ID helper (alphabetic sort to guarantee both participants use the exact same ID)
+    fun getDirectConvId(email1: String, email2: String): String {
+        val e1 = email1.trim().lowercase().replace("[^a-zA-Z0-9]".toRegex(), "_")
+        val e2 = email2.trim().lowercase().replace("[^a-zA-Z0-9]".toRegex(), "_")
+        return if (e1 <= e2) "conv_${e1}__${e2}" else "conv_${e2}__${e1}"
     }
 
     // --- CONVERSATIONS ---
@@ -106,14 +202,19 @@ class AppDataStore(context: Context) {
 
     fun addMessage(convId: String, message: Message) {
         val list = getMessages(convId)
+        if (list.any { it.id == message.id }) return
         list.add(message)
         prefs.edit().putString(KEY_MESSAGES_PREFIX + convId, gson.toJson(list)).apply()
         updateConversation(
             convId = convId,
             title = message.senderName,
-            lastMessage = message.text,
+            lastMessage = if (message.messageType == "image") "📷 [Hình ảnh]" else message.text,
             timestamp = message.timestamp
         )
+    }
+
+    fun saveMessages(convId: String, list: List<Message>) {
+        prefs.edit().putString(KEY_MESSAGES_PREFIX + convId, gson.toJson(list)).apply()
     }
 
     // --- CALL HISTORY ---
@@ -132,6 +233,11 @@ class AppDataStore(context: Context) {
         list.add(0, item)
         prefs.edit().putString(KEY_CALL_HISTORY, gson.toJson(list)).apply()
     }
+
+    // --- SERVER API HOST ---
+    var customServerHost: String?
+        get() = prefs.getString(KEY_SERVER_API_HOST, null)
+        set(value) = prefs.edit().putString(KEY_SERVER_API_HOST, value).apply()
 
     // --- THEME PREFERENCE ---
     var themeMode: Int

@@ -14,13 +14,32 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/bg_message_me"
-        android:elevation="1dp">
+        android:elevation="1dp"
+        android:padding="8dp">
+
+        <!-- Attached Image with Rounded Corners -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardMessageImageMe"
+            android:layout_width="230dp"
+            android:layout_height="200dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            android:visibility="gone"
+            android:layout_marginBottom="6dp">
+
+            <ImageView
+                android:id="@+id/ivMessageImageMe"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:contentDescription="Hình ảnh đính kèm" />
+        </androidx.cardview.widget.CardView>
 
         <TextView
             android:id="@+id/tvMessageTextMe"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Xin chào! Bạn có thể chia sẻ màn hình giúp mình xem thử không?"
+            android:text="Xin chào!"
             android:textColor="@color/white"
             android:textSize="15sp"
             android:lineSpacingExtra="2dp" />

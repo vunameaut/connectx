@@ -8,6 +8,16 @@ data class User(
     val isOnline: Boolean = true
 )
 
+data class FriendRequest(
+    val id: String,
+    val senderId: String,
+    val senderName: String,
+    val senderEmail: String,
+    val receiverEmail: String,
+    val timestamp: String,
+    val status: String = "PENDING" // "PENDING", "ACCEPTED", "REJECTED"
+)
+
 data class Conversation(
     val id: String,
     val title: String,
@@ -25,7 +35,9 @@ data class Message(
     val senderName: String,
     val text: String,
     val timestamp: String,
-    val isMe: Boolean
+    val isMe: Boolean,
+    val mediaUrl: String? = null,
+    val messageType: String = "text" // "text", "image", "video", "call", "file"
 )
 
 data class CallHistoryItem(

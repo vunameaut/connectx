@@ -16,16 +16,23 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.vhn.connectx.adapter.CallHistoryAdapter
 import com.vhn.connectx.adapter.ContactAdapter
 import com.vhn.connectx.adapter.ConversationAdapter
+import com.vhn.connectx.adapter.FriendRequestAdapter
 import com.vhn.connectx.adapter.StoryAdapter
 import com.vhn.connectx.data.AppDataStore
 import com.vhn.connectx.model.CallHistoryItem
 import com.vhn.connectx.model.Conversation
+import com.vhn.connectx.model.FriendRequest
 import com.vhn.connectx.model.SessionManager
 import com.vhn.connectx.model.User
+import com.vhn.connectx.net.ApiClient
 import com.vhn.connectx.update.UpdateManager
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class HomeActivity : AppCompatActivity() {
 
@@ -55,8 +62,15 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var conversationAdapter: ConversationAdapter
     private val conversations = mutableListOf<Conversation>()
     private lateinit var btnEmptyChatAddFriend: MaterialButton
+    private lateinit var fabNewChat: FloatingActionButton
 
-    // Tab 2: Contacts
+    // Tab 2: Contacts & Friend Requests
+    private lateinit var layoutPendingRequests: LinearLayout
+    private lateinit var tvPendingCountBadge: TextView
+    private lateinit var rvFriendRequests: RecyclerView
+    private lateinit var friendRequestAdapter: FriendRequestAdapter
+    private val pendingRequests = mutableListOf<FriendRequest>()
+
     private lateinit var layoutEmptyContacts: View
     private lateinit var tvContactsHeader: TextView
     private lateinit var rvContacts: RecyclerView
@@ -80,6 +94,8 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var btnToggleTheme: LinearLayout
     private lateinit var tvCurrentThemeLabel: TextView
     private lateinit var btnAboutDevice: LinearLayout
+    private lateinit var btnServerConfig: LinearLayout
+    private lateinit var tvCurrentServerHost: TextView
     private lateinit var btnLogout: MaterialButton
     private lateinit var btnCheckUpdate: MaterialButton
 
@@ -107,6 +123,7 @@ class HomeActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshData()
+        syncFriendRequestsFromServer()
     }
 
     private fun initViews() {
@@ -125,7 +142,7 @@ class HomeActivity : AppCompatActivity() {
         rvOnlineStories = findViewById(R.id.rvOnlineStories)
         rvOnlineStories.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
         storyAdapter = StoryAdapter(onlineUsers) { targetUser ->
-            openChat("c_${targetUser.id}", targetUser.displayName)
+            openChatWithUser(targetUser)
         }
         rvOnlineStories.adapter = storyAdapter
 
@@ -134,28 +151,42 @@ class HomeActivity : AppCompatActivity() {
         rvConversations = findViewById(R.id.rvConversations)
         rvConversations.layoutManager = LinearLayoutManager(this)
         conversationAdapter = ConversationAdapter(conversations) { conv ->
-            openChat(conv.id, conv.title)
+            openChat(conv.id, conv.title, "")
         }
         rvConversations.adapter = conversationAdapter
 
         btnEmptyChatAddFriend = findViewById(R.id.btnEmptyChatAddFriend)
-        btnEmptyChatAddFriend.setOnClickListener { showAddFriendDialog() }
+        btnEmptyChatAddFriend.setOnClickListener { showSendFriendRequestDialog() }
 
-        // Tab 2: Contacts
+        fabNewChat = findViewById(R.id.fabNewChat)
+        fabNewChat.setOnClickListener { showSelectFriendToChatDialog() }
+
+        // Tab 2: Contacts & Friend Requests
+        layoutPendingRequests = findViewById(R.id.layoutPendingRequests)
+        tvPendingCountBadge = findViewById(R.id.tvPendingCountBadge)
+        rvFriendRequests = findViewById(R.id.rvFriendRequests)
+        rvFriendRequests.layoutManager = LinearLayoutManager(this)
+        friendRequestAdapter = FriendRequestAdapter(
+            pendingRequests,
+            onAccept = { req -> handleAcceptFriendRequest(req) },
+            onReject = { req -> handleRejectFriendRequest(req) }
+        )
+        rvFriendRequests.adapter = friendRequestAdapter
+
         layoutEmptyContacts = findViewById(R.id.layoutEmptyContacts)
         tvContactsHeader = findViewById(R.id.tvContactsHeader)
         rvContacts = findViewById(R.id.rvContacts)
         rvContacts.layoutManager = LinearLayoutManager(this)
         contactAdapter = ContactAdapter(
             contacts,
-            onChatClick = { contact -> openChat("c_${contact.id}", contact.displayName) },
+            onChatClick = { contact -> openChatWithUser(contact) },
             onCallClick = { contact -> startCall(contact.displayName, isVideo = false) }
         )
         rvContacts.adapter = contactAdapter
 
         btnQuickAddFriend = findViewById(R.id.btnQuickAddFriend)
-        btnQuickAddFriend.setOnClickListener { showAddFriendDialog() }
-        btnAddAction.setOnClickListener { showAddFriendDialog() }
+        btnQuickAddFriend.setOnClickListener { showSendFriendRequestDialog() }
+        btnAddAction.setOnClickListener { showSendFriendRequestDialog() }
 
         // Tab 3: Calls
         layoutEmptyCalls = findViewById(R.id.layoutEmptyCalls)
@@ -169,23 +200,13 @@ class HomeActivity : AppCompatActivity() {
 
         btnQuickVoiceCall = findViewById(R.id.btnQuickVoiceCall)
         btnQuickVideoCall = findViewById(R.id.btnQuickVideoCall)
+
+        // Select contact before calling to avoid blind calling
         btnQuickVoiceCall.setOnClickListener {
-            val contactName = contacts.firstOrNull()?.displayName
-            if (contactName != null) {
-                startCall(contactName, isVideo = false)
-            } else {
-                Toast.makeText(this, "Vui lòng thêm bạn bè vào danh bạ để gọi thoại", Toast.LENGTH_SHORT).show()
-                showAddFriendDialog()
-            }
+            showSelectContactToCallDialog(isVideo = false)
         }
         btnQuickVideoCall.setOnClickListener {
-            val contactName = contacts.firstOrNull()?.displayName
-            if (contactName != null) {
-                startCall(contactName, isVideo = true)
-            } else {
-                Toast.makeText(this, "Vui lòng thêm bạn bè vào danh bạ để gọi video", Toast.LENGTH_SHORT).show()
-                showAddFriendDialog()
-            }
+            showSelectContactToCallDialog(isVideo = true)
         }
 
         // Tab 4: Profile
@@ -196,6 +217,8 @@ class HomeActivity : AppCompatActivity() {
         btnToggleTheme = findViewById(R.id.btnToggleTheme)
         tvCurrentThemeLabel = findViewById(R.id.tvCurrentThemeLabel)
         btnAboutDevice = findViewById(R.id.btnAboutDevice)
+        btnServerConfig = findViewById(R.id.btnServerConfig)
+        tvCurrentServerHost = findViewById(R.id.tvCurrentServerHost)
         btnLogout = findViewById(R.id.btnLogout)
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
 
@@ -205,6 +228,7 @@ class HomeActivity : AppCompatActivity() {
         tvProfileLargeAvatar.text = initial
 
         updateThemeLabel()
+        updateServerHostLabel()
 
         btnToggleTheme.setOnClickListener {
             showThemeSelectionDialog()
@@ -212,6 +236,10 @@ class HomeActivity : AppCompatActivity() {
 
         btnAboutDevice.setOnClickListener {
             showAboutDeviceDialog()
+        }
+
+        btnServerConfig.setOnClickListener {
+            showServerConfigDialog()
         }
 
         btnCheckUpdate.setOnClickListener {
@@ -259,7 +287,21 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun refreshData() {
-        // 1. Contacts
+        val myEmail = sessionManager.currentUser.email
+
+        // 1. Pending Friend Requests
+        pendingRequests.clear()
+        pendingRequests.addAll(appDataStore.getPendingRequestsFor(myEmail))
+        friendRequestAdapter.notifyDataSetChanged()
+
+        if (pendingRequests.isNotEmpty()) {
+            layoutPendingRequests.visibility = View.VISIBLE
+            tvPendingCountBadge.text = pendingRequests.size.toString()
+        } else {
+            layoutPendingRequests.visibility = View.GONE
+        }
+
+        // 2. Contacts
         contacts.clear()
         contacts.addAll(appDataStore.getContacts())
         contactAdapter.notifyDataSetChanged()
@@ -274,13 +316,13 @@ class HomeActivity : AppCompatActivity() {
             rvContacts.visibility = View.VISIBLE
         }
 
-        // Online stories (friends from contacts who are online)
+        // Online stories
         onlineUsers.clear()
         onlineUsers.addAll(contacts)
         storyAdapter.notifyDataSetChanged()
         layoutStoriesRow.visibility = if (onlineUsers.isNotEmpty()) View.VISIBLE else View.GONE
 
-        // 2. Conversations
+        // 3. Conversations
         conversations.clear()
         conversations.addAll(appDataStore.getConversations())
         conversationAdapter.notifyDataSetChanged()
@@ -295,7 +337,7 @@ class HomeActivity : AppCompatActivity() {
             rvConversations.visibility = View.VISIBLE
         }
 
-        // 3. Call history
+        // 4. Call history
         callHistory.clear()
         callHistory.addAll(appDataStore.getCallHistory())
         callHistoryAdapter.notifyDataSetChanged()
@@ -311,53 +353,167 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    private fun openChat(conversationId: String, title: String) {
+    private fun syncFriendRequestsFromServer() {
+        val myEmail = sessionManager.currentUser.email
+        if (myEmail.isBlank()) return
+
+        ApiClient.syncFriendRequests(this, myEmail) { serverRequests ->
+            if (serverRequests.isNotEmpty()) {
+                var changed = false
+                for (sReq in serverRequests) {
+                    if (sReq.receiverEmail.equals(myEmail, ignoreCase = true) && sReq.status == "PENDING") {
+                        val added = appDataStore.sendFriendRequest(sReq)
+                        if (added) changed = true
+                    }
+                }
+                if (changed) {
+                    refreshData()
+                }
+            }
+        }
+    }
+
+    private fun showSendFriendRequestDialog() {
+        val input = EditText(this).apply {
+            hint = "Nhập email bạn bè (vd: ban@gmail.com)"
+            setPadding(44, 32, 44, 32)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Gửi lời mời kết bạn")
+            .setMessage("Nhập email của người bạn muốn kết nối. Đối phương sẽ nhận được lời mời và đồng ý trước khi cả hai bắt đầu trò chuyện:")
+            .setView(input)
+            .setPositiveButton("Gửi lời mời") { _, _ ->
+                val targetEmail = input.text.toString().trim()
+                val myUser = sessionManager.currentUser
+
+                if (targetEmail.isEmpty()) {
+                    Toast.makeText(this, "Vui lòng nhập địa chỉ email", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                if (targetEmail.equals(myUser.email, ignoreCase = true)) {
+                    Toast.makeText(this, "Bạn không thể gửi lời mời kết bạn cho chính mình", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                if (contacts.any { it.email.equals(targetEmail, ignoreCase = true) }) {
+                    Toast.makeText(this, "Người này đã có trong danh bạ của bạn", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                val newReq = FriendRequest(
+                    id = "fr_${System.currentTimeMillis()}",
+                    senderId = myUser.id,
+                    senderName = myUser.displayName,
+                    senderEmail = myUser.email,
+                    receiverEmail = targetEmail,
+                    timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
+                    status = "PENDING"
+                )
+
+                // Save locally
+                appDataStore.sendFriendRequest(newReq)
+
+                // Send to backend server
+                ApiClient.sendFriendRequest(this, newReq) { success ->
+                    // Request sent to server
+                }
+
+                Toast.makeText(this, "Đã gửi lời mời kết bạn tới $targetEmail! Vui lòng chờ đối phương chấp nhận.", Toast.LENGTH_LONG).show()
+                refreshData()
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun handleAcceptFriendRequest(req: FriendRequest) {
+        val myUser = sessionManager.currentUser
+        val newFriend = appDataStore.acceptFriendRequest(req.id, myUser)
+        if (newFriend != null) {
+            ApiClient.respondFriendRequest(this, req.id, "ACCEPTED") {}
+            Toast.makeText(this, "Đã trở thành bạn bè với ${newFriend.displayName}!", Toast.LENGTH_SHORT).show()
+            refreshData()
+            // Open direct chat
+            openChatWithUser(newFriend)
+        }
+    }
+
+    private fun handleRejectFriendRequest(req: FriendRequest) {
+        appDataStore.rejectFriendRequest(req.id)
+        ApiClient.respondFriendRequest(this, req.id, "REJECTED") {}
+        Toast.makeText(this, "Đã từ chối lời mời kết bạn", Toast.LENGTH_SHORT).show()
+        refreshData()
+    }
+
+    private fun showSelectFriendToChatDialog() {
+        if (contacts.isEmpty()) {
+            Toast.makeText(this, "Bạn chưa có bạn bè trong danh bạ. Hãy gửi lời mời kết bạn trước!", Toast.LENGTH_LONG).show()
+            showSendFriendRequestDialog()
+            return
+        }
+
+        val names = contacts.map { "${it.displayName} (${it.email})" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Bắt đầu cuộc trò chuyện mới")
+            .setItems(names) { _, which ->
+                val selectedUser = contacts[which]
+                openChatWithUser(selectedUser)
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun showSelectContactToCallDialog(isVideo: Boolean) {
+        if (contacts.isEmpty()) {
+            val callType = if (isVideo) "gọi video" else "gọi thoại"
+            Toast.makeText(this, "Danh bạ đang trống. Hãy kết bạn trước khi thực hiện $callType!", Toast.LENGTH_LONG).show()
+            showSendFriendRequestDialog()
+            return
+        }
+
+        val title = if (isVideo) "📹 Chọn người muốn gọi Video" else "📞 Chọn người muốn gọi Thoại"
+        val names = contacts.map { "${it.displayName} • ${it.email}" }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setItems(names) { _, which ->
+                val selectedContact = contacts[which]
+                startCall(selectedContact.displayName, isVideo)
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun openChatWithUser(user: User) {
+        val convId = appDataStore.getDirectConvId(sessionManager.currentUser.email, user.email)
+        openChat(convId, user.displayName, user.email)
+    }
+
+    private fun openChat(conversationId: String, title: String, contactEmail: String) {
         val intent = Intent(this, ChatActivity::class.java).apply {
             putExtra("EXTRA_CONV_ID", conversationId)
             putExtra("EXTRA_CONV_TITLE", title)
+            putExtra("EXTRA_CONTACT_EMAIL", contactEmail)
         }
         startActivity(intent)
     }
 
     private fun startCall(contactName: String, isVideo: Boolean) {
+        val callItem = CallHistoryItem(
+            id = "call_${System.currentTimeMillis()}",
+            contactName = contactName,
+            timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
+            isVideo = isVideo,
+            isIncoming = false
+        )
+        appDataStore.addCallHistory(callItem)
+
         val intent = Intent(this, CallActivity::class.java).apply {
             putExtra("EXTRA_CONTACT_NAME", contactName)
             putExtra("EXTRA_IS_VIDEO", isVideo)
         }
         startActivity(intent)
-    }
-
-    private fun showAddFriendDialog() {
-        val input = EditText(this).apply {
-            hint = "Nhập email bạn bè (vd: friend@gmail.com)"
-            setPadding(44, 32, 44, 32)
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Thêm bạn bè mới")
-            .setMessage("Nhập email để thêm bạn vào danh bạ và bắt đầu nhắn tin:")
-            .setView(input)
-            .setPositiveButton("Thêm vào danh bạ") { _, _ ->
-                val query = input.text.toString().trim()
-                if (query.isNotEmpty()) {
-                    val displayName = query.substringBefore("@")
-                    val newContact = User(
-                        id = "u_${System.currentTimeMillis()}",
-                        displayName = displayName,
-                        email = query,
-                        isOnline = true
-                    )
-                    val added = appDataStore.addContact(newContact)
-                    if (added) {
-                        Toast.makeText(this, "Đã thêm $displayName vào danh bạ!", Toast.LENGTH_SHORT).show()
-                        refreshData()
-                    } else {
-                        Toast.makeText(this, "Người dùng này đã có trong danh bạ", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-            .setNegativeButton("Hủy", null)
-            .show()
     }
 
     private fun updateThemeLabel() {
@@ -366,6 +522,42 @@ class HomeActivity : AppCompatActivity() {
             AppCompatDelegate.MODE_NIGHT_NO -> "Giao diện Sáng"
             else -> "Theo hệ thống"
         }
+    }
+
+    private fun updateServerHostLabel() {
+        val host = appDataStore.customServerHost
+        tvCurrentServerHost.text = if (host.isNullOrBlank()) "10.0.2.2:4000 (Mặc định)" else host.removePrefix("http://").removePrefix("https://")
+    }
+
+    private fun showServerConfigDialog() {
+        val input = EditText(this).apply {
+            setText(appDataStore.customServerHost ?: "http://10.0.2.2:4000")
+            hint = "http://192.168.1.xxx:4000"
+            setPadding(44, 32, 44, 32)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Cấu hình Máy chủ Kết nối")
+            .setMessage("Nhập địa chỉ IP Backend API để đồng bộ dữ liệu và gọi WebRTC giữa các thiết bị (Dùng 10.0.2.2 cho máy ảo, hoặc IP LAN máy tính khi chạy trên điện thoại thật):")
+            .setView(input)
+            .setPositiveButton("Lưu cấu hình") { _, _ ->
+                val newHost = input.text.toString().trim()
+                if (newHost.isNotEmpty()) {
+                    appDataStore.customServerHost = newHost
+                    ApiClient.apiBaseUrl = newHost
+                    updateServerHostLabel()
+                    Toast.makeText(this, "Đã cập nhật máy chủ: $newHost", Toast.LENGTH_SHORT).show()
+                    syncFriendRequestsFromServer()
+                }
+            }
+            .setNeutralButton("Khôi phục mặc định") { _, _ ->
+                appDataStore.customServerHost = null
+                ApiClient.apiBaseUrl = "http://10.0.2.2:4000"
+                updateServerHostLabel()
+                Toast.makeText(this, "Đã khôi phục địa chỉ mặc định", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
     }
 
     private fun showThemeSelectionDialog() {

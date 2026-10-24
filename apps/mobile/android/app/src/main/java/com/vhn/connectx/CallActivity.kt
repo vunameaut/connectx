@@ -138,8 +138,8 @@ class CallActivity : AppCompatActivity() {
         btnEndCall = findViewById(R.id.btnEndCall)
 
         tvCallContactName.text = contactName
-        tvCallAvatar.text = contactName.take(1).uppercase()
-        tvCallStatus.text = if (isVideoEnabled) "Cuộc gọi Video WebRTC (TURN Connected)" else "Cuộc gọi Thoại WebRTC"
+        tvCallAvatar.text = contactName.ifBlank { "U" }.take(1).uppercase()
+        tvCallStatus.text = if (isVideoEnabled) "Cuộc gọi Video HD • Bảo mật E2E" else "Cuộc gọi Thoại • Bảo mật E2E"
     }
 
     private fun setupCallControls() {

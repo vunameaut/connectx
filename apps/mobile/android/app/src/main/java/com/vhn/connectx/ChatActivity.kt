@@ -2,11 +2,17 @@ package com.vhn.connectx
 
 import android.app.AlertDialog
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -17,6 +23,8 @@ import com.vhn.connectx.model.CallHistoryItem
 import com.vhn.connectx.model.Message
 import com.vhn.connectx.model.SessionManager
 import com.vhn.connectx.net.ApiClient
+import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -36,10 +44,31 @@ class ChatActivity : AppCompatActivity() {
     private lateinit var btnChatVideoCall: ImageView
     private lateinit var etMessageInput: EditText
     private lateinit var btnSendMessage: FloatingActionButton
-    private lateinit var btnAttachment: ImageView
+    private lateinit var btnPickImage: ImageView
+    private lateinit var btnCamera: ImageView
+    private lateinit var btnEmoji: ImageView
+    private lateinit var btnVoiceRecord: ImageView
 
     private var convId: String = "c1"
     private var contactTitle: String = "Bạn bè"
+    private var contactEmail: String = ""
+
+    private val syncHandler = Handler(Looper.getMainLooper())
+    private var isSyncing = false
+
+    private val syncRunnable = object : Runnable {
+        override fun run() {
+            pollMessagesFromServer()
+            syncHandler.postDelayed(this, 2500) // Poll every 2.5 seconds
+        }
+    }
+
+    // Photo picker launcher from Android system gallery
+    private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            handleImagePicked(uri)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,9 +79,26 @@ class ChatActivity : AppCompatActivity() {
 
         convId = intent.getStringExtra("EXTRA_CONV_ID") ?: "c1"
         contactTitle = intent.getStringExtra("EXTRA_CONV_TITLE") ?: "Bạn bè"
+        contactEmail = intent.getStringExtra("EXTRA_CONTACT_EMAIL") ?: ""
+
+        // If convId is not direct normalized format and we have emails, normalize it
+        if (!convId.startsWith("conv_") && contactEmail.isNotBlank()) {
+            convId = appDataStore.getDirectConvId(sessionManager.currentUser.email, contactEmail)
+        }
 
         initViews()
-        loadMessages()
+        loadLocalMessages()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        pollMessagesFromServer()
+        syncHandler.postDelayed(syncRunnable, 2500)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        syncHandler.removeCallbacks(syncRunnable)
     }
 
     private fun initViews() {
@@ -63,7 +109,10 @@ class ChatActivity : AppCompatActivity() {
         btnChatVideoCall = findViewById(R.id.btnChatVideoCall)
         etMessageInput = findViewById(R.id.etMessageInput)
         btnSendMessage = findViewById(R.id.btnSendMessage)
-        btnAttachment = findViewById(R.id.btnAttachment)
+        btnPickImage = findViewById(R.id.btnPickImage)
+        btnCamera = findViewById(R.id.btnCamera)
+        btnEmoji = findViewById(R.id.btnEmoji)
+        btnVoiceRecord = findViewById(R.id.btnVoiceRecord)
 
         tvChatContactName.text = contactTitle
         tvChatAvatar.text = contactTitle.ifBlank { "U" }.take(1).uppercase()
@@ -112,21 +161,25 @@ class ChatActivity : AppCompatActivity() {
         rvMessages.adapter = messageAdapter
 
         btnSendMessage.setOnClickListener {
-            sendMessage()
+            sendTextMessage()
         }
 
-        btnAttachment.setOnClickListener {
-            showMediaUploadDialog()
+        btnPickImage.setOnClickListener {
+            // Open Android system photo picker
+            pickImageLauncher.launch("image/*")
         }
 
-        val btnEmoji: ImageView = findViewById(R.id.btnEmoji)
+        btnCamera.setOnClickListener {
+            Toast.makeText(this, "Mở máy ảnh chụp ảnh nhanh...", Toast.LENGTH_SHORT).show()
+            pickImageLauncher.launch("image/*")
+        }
+
         btnEmoji.setOnClickListener {
-            etMessageInput.append(" 😊")
+            showEmojiSelector()
         }
 
-        val btnVoiceRecord: ImageView = findViewById(R.id.btnVoiceRecord)
         btnVoiceRecord.setOnClickListener {
-            Toast.makeText(this, "Nhấn giữ để gửi tin nhắn thoại", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Đang ghi âm tin nhắn thoại... Thả ra để gửi", Toast.LENGTH_SHORT).show()
         }
 
         val btnChatMore: ImageView = findViewById(R.id.btnChatMore)
@@ -135,7 +188,7 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadMessages() {
+    private fun loadLocalMessages() {
         messages.clear()
         val saved = appDataStore.getMessages(convId)
         messages.addAll(saved)
@@ -145,7 +198,7 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
-    private fun sendMessage() {
+    private fun sendTextMessage() {
         val text = etMessageInput.text.toString().trim()
         if (text.isEmpty()) return
 
@@ -157,81 +210,113 @@ class ChatActivity : AppCompatActivity() {
             senderName = sessionManager.currentUser.displayName,
             text = text,
             timestamp = currentTime,
-            isMe = true
+            isMe = true,
+            mediaUrl = null,
+            messageType = "text"
         )
 
+        // Save locally
         appDataStore.addMessage(convId, newMsg)
         messageAdapter.addMessage(newMsg)
         etMessageInput.setText("")
         rvMessages.smoothScrollToPosition(messages.size - 1)
+
+        // Sync with backend server so recipient receives it instantly
+        ApiClient.sendMessageToServer(this, convId, newMsg) { success ->
+            // Message synced to server
+        }
     }
 
-    private fun showMediaUploadDialog() {
-        val options = arrayOf(
-            "📷 Gửi ảnh chụp từ thư viện",
-            "📁 Đính kèm tài liệu",
-            "📸 Chụp ảnh nhanh từ camera"
-        )
+    private fun handleImagePicked(uri: Uri) {
+        try {
+            // Copy selected image to local cache for instant viewing
+            val inputStream = contentResolver.openInputStream(uri) ?: return
+            val imagesDir = File(cacheDir, "chat_images").apply { if (!exists()) mkdirs() }
+            val localFile = File(imagesDir, "img_${System.currentTimeMillis()}.jpg")
+            val outputStream = FileOutputStream(localFile)
 
-        AlertDialog.Builder(this)
-            .setTitle("Đính kèm Media")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> sendSampleImageMessage()
-                    1 -> sendSampleDocumentMessage()
-                    2 -> Toast.makeText(this, "Mở camera chụp ảnh...", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton("Hủy", null)
-            .show()
-    }
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+            outputStream.flush()
+            outputStream.close()
+            inputStream.close()
 
-    private fun sendSampleImageMessage() {
-        val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-        val supabaseToken = sessionManager.supabaseToken ?: "token_user"
-
-        ApiClient.signCloudinaryUpload(
-            conversationId = convId,
-            mimeType = "image/jpeg",
-            sizeBytes = 256000,
-            supabaseToken = supabaseToken
-        ) { ticket ->
-            val cloudUrl = if (ticket != null) {
-                "https://res.cloudinary.com/${ticket.cloudName}/image/upload/${ticket.folder}/photo_${System.currentTimeMillis()}.jpg"
-            } else {
-                "https://images.unsplash.com/photo-1579202673506-ca3ce28943ef?w=600"
-            }
-
+            val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
             val imageMsg = Message(
                 id = "media_${System.currentTimeMillis()}",
                 conversationId = convId,
                 senderId = sessionManager.currentUser.id,
                 senderName = sessionManager.currentUser.displayName,
-                text = "📷 [Hình ảnh]: $cloudUrl",
+                text = "📷 [Hình ảnh]",
                 timestamp = currentTime,
-                isMe = true
+                isMe = true,
+                mediaUrl = localFile.absolutePath,
+                messageType = "image"
             )
+
+            // Save and render locally
             appDataStore.addMessage(convId, imageMsg)
             messageAdapter.addMessage(imageMsg)
             rvMessages.smoothScrollToPosition(messages.size - 1)
-            Toast.makeText(this, "Đã gửi hình ảnh thành công!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Đã gửi hình ảnh!", Toast.LENGTH_SHORT).show()
+
+            // Synchronize with server
+            ApiClient.sendMessageToServer(this, convId, imageMsg) { success ->
+                // Image message synced
+            }
+
+            // Attempt Cloudinary upload in background if online
+            val token = sessionManager.supabaseToken ?: "token"
+            ApiClient.signCloudinaryUpload(convId, "image/jpeg", localFile.length(), token) { ticket ->
+                if (ticket != null) {
+                    val bytes = localFile.readBytes()
+                    ApiClient.uploadToCloudinary(ticket, bytes, localFile.name) { cdnUrl ->
+                        if (!cdnUrl.isNullOrBlank()) {
+                            // Update message with CDN url
+                            val updatedMsg = imageMsg.copy(mediaUrl = cdnUrl)
+                            ApiClient.sendMessageToServer(this@ChatActivity, convId, updatedMsg) {}
+                        }
+                    }
+                }
+            }
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Không thể gửi ảnh: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun sendSampleDocumentMessage() {
-        val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-        val docMsg = Message(
-            id = "doc_${System.currentTimeMillis()}",
-            conversationId = convId,
-            senderId = sessionManager.currentUser.id,
-            senderName = sessionManager.currentUser.displayName,
-            text = "📁 [Tài liệu]: TaiLieu_CongViec.pdf (1.2 MB)",
-            timestamp = currentTime,
-            isMe = true
-        )
-        appDataStore.addMessage(convId, docMsg)
-        messageAdapter.addMessage(docMsg)
-        rvMessages.smoothScrollToPosition(messages.size - 1)
-        Toast.makeText(this, "Đã gửi tài liệu thành công!", Toast.LENGTH_SHORT).show()
+    private fun pollMessagesFromServer() {
+        if (isSyncing) return
+        isSyncing = true
+
+        ApiClient.syncMessages(this, convId, sessionManager.currentUser.id) { remoteMessages ->
+            isSyncing = false
+            if (remoteMessages.isNotEmpty()) {
+                var hasNew = false
+                for (remoteMsg in remoteMessages) {
+                    if (messages.none { it.id == remoteMsg.id }) {
+                        messages.add(remoteMsg)
+                        appDataStore.addMessage(convId, remoteMsg)
+                        hasNew = true
+                    }
+                }
+                if (hasNew) {
+                    messageAdapter.notifyDataSetChanged()
+                    rvMessages.smoothScrollToPosition(messages.size - 1)
+                }
+            }
+        }
+    }
+
+    private fun showEmojiSelector() {
+        val emojis = arrayOf("😊", "😂", "❤️", "👍", "🎉", "🔥", "✨", "🙏", "😍", "🥳", "😎", "🤝")
+        AlertDialog.Builder(this)
+            .setTitle("Chọn biểu tượng cảm xúc")
+            .setItems(emojis) { _, which ->
+                etMessageInput.append(" " + emojis[which])
+            }
+            .setNegativeButton("Đóng", null)
+            .show()
     }
 }
