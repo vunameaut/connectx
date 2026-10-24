@@ -39,11 +39,7 @@ class CallService : Service() {
         fun start(context: Context) {
             val intent = Intent(context, CallService::class.java)
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                context.startService(intent)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start CallService: ${e.message}")
             }
@@ -51,7 +47,11 @@ class CallService : Service() {
 
         fun stop(context: Context) {
             val intent = Intent(context, CallService::class.java)
-            context.stopService(intent)
+            try {
+                context.stopService(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to stop CallService: ${e.message}")
+            }
         }
     }
 
@@ -63,7 +63,6 @@ class CallService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannels()
-        startAsForeground()
         listenForIncomingCalls()
     }
 

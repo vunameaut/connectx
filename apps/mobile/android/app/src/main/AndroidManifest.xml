@@ -14,7 +14,7 @@
     <!-- Mandatory Permissions for Android 14+ (API 34/35) Foreground Services -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -64,8 +64,7 @@
         <service
             android:name="com.vhn.connectx.net.CallService"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="phoneCall" />
+            android:exported="false" />
 
         <!-- Screen Capture Foreground Service (Complies with Android 14+ FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION) -->
         <service
