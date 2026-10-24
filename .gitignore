@@ -47,3 +47,6 @@ apps/mobile/ios/Pods/
 apps/mobile/ios/build/
 *.xcworkspace
 xcuserdata/
+
+# TURN relay credentials (local only)
+apps/mobile/android/turn.properties

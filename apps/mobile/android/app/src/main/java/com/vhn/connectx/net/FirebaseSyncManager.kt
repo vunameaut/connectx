@@ -465,6 +465,7 @@ object FirebaseSyncManager {
      */
     fun listenIncomingCall(
         myEmail: String,
+        onNoRinging: (() -> Unit)? = null,
         onIncomingCall: (callId: String, callerName: String, callerEmail: String, isVideo: Boolean) -> Unit
     ): ListenerRegistration? {
         val cleanEmail = myEmail.trim().lowercase()
@@ -476,6 +477,11 @@ object FirebaseSyncManager {
                 .whereEqualTo("status", "RINGING")
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) return@addSnapshotListener
+                    if (snapshot.isEmpty) {
+                        // Không còn cuộc gọi nào đang đổ chuông (đã nghe / từ chối / nhỡ / người gọi huỷ)
+                        onNoRinging?.invoke()
+                        return@addSnapshotListener
+                    }
                     for (doc in snapshot.documents) {
                         val callId = doc.getString("id") ?: doc.id
                         val callerName = doc.getString("callerName") ?: "Bạn bè"
@@ -503,7 +509,7 @@ object FirebaseSyncManager {
         if (callId.isBlank()) return
         firestore.collection("active_calls")
             .document(callId)
-            .set(mapOf("status" to status), com.google.firebase.firestore.SetOptions.merge())
+            .update("status", status)
             .addOnSuccessListener { onComplete?.invoke(true) }
             .addOnFailureListener { onComplete?.invoke(false) }
     }

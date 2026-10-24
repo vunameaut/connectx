@@ -165,6 +165,12 @@ class CallActivity : AppCompatActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        dismissNotification()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         isCallActive = true
@@ -272,6 +278,11 @@ class CallActivity : AppCompatActivity() {
     }
 
     private fun setupOutgoingCallMode() {
+        if (contactEmail.isBlank()) {
+            Toast.makeText(this, "Không xác định được email người nhận. Hãy mở cuộc gọi từ danh bạ bạn bè.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         tvCallStatus.text = "Đang gọi..."
         tvCallTimer.text = "Đang kết nối..."
         callControlsBar.visibility = View.VISIBLE
@@ -281,24 +292,7 @@ class CallActivity : AppCompatActivity() {
         if (isVideoEnabled) {
             try {
                 if (webRtcManager == null) {
-                    webRtcManager = com.vhn.connectx.net.WebRtcManager(
-                        context = applicationContext,
-                        callId = callId,
-                        isCaller = true
-                    ).apply {
-                        onRemoteVideoTrackReady = {
-                            runOnUiThread {
-                                remoteVideoView.visibility = View.VISIBLE
-                                callHeaderLayout.visibility = View.GONE
-                                tvCallStatus.text = "Đang truyền hình ảnh HD"
-                            }
-                        }
-                        onCallDisconnected = {
-                            runOnUiThread {
-                                tvCallStatus.text = "Tín hiệu mạng không ổn định..."
-                            }
-                        }
-                    }
+                    webRtcManager = createWebRtcManager()
                 }
                 webRtcManager?.startCamera(localVideoView, isFront = true)
                 cardLocalVideo.visibility = View.VISIBLE
@@ -432,7 +426,7 @@ class CallActivity : AppCompatActivity() {
         ringingTimeoutHandler.removeCallbacksAndMessages(null)
         callControlsBar.visibility = View.VISIBLE
         layoutIncomingCallActions.visibility = View.GONE
-        tvCallStatus.text = if (isVideoEnabled) "Đã kết nối • Video HD (WebRTC TURN)" else "Đã kết nối • Thoại HD (WebRTC)"
+        tvCallStatus.text = if (isVideoEnabled) "Đang thiết lập kết nối hình ảnh..." else "Đang thiết lập kết nối thoại..."
 
         // Start call timer when answered (nhấc máy thì đếm giờ)
         callSeconds = 0
@@ -444,27 +438,40 @@ class CallActivity : AppCompatActivity() {
         setupWebRtcMedia()
     }
 
+    private fun createWebRtcManager(): com.vhn.connectx.net.WebRtcManager {
+        return com.vhn.connectx.net.WebRtcManager(
+            context = applicationContext,
+            callId = callId,
+            isCaller = !isIncoming
+        ).apply {
+            onRemoteVideoTrackReady = {
+                runOnUiThread {
+                    remoteVideoView.visibility = View.VISIBLE
+                    callHeaderLayout.visibility = View.GONE
+                    tvCallStatus.text = "Đang truyền hình ảnh"
+                }
+            }
+            onIceConnected = {
+                runOnUiThread { tvCallStatus.text = "Đã kết nối" }
+            }
+            onIceFailed = { reason ->
+                runOnUiThread {
+                    tvCallStatus.text = reason
+                    Toast.makeText(this@CallActivity, reason, Toast.LENGTH_LONG).show()
+                }
+            }
+            onCallDisconnected = {
+                runOnUiThread {
+                    tvCallStatus.text = "Tín hiệu mạng không ổn định..."
+                }
+            }
+        }
+    }
+
     private fun setupWebRtcMedia() {
         try {
             if (webRtcManager == null) {
-                webRtcManager = com.vhn.connectx.net.WebRtcManager(
-                    context = applicationContext,
-                    callId = callId,
-                    isCaller = !isIncoming
-                ).apply {
-                    onRemoteVideoTrackReady = {
-                        runOnUiThread {
-                            remoteVideoView.visibility = View.VISIBLE
-                            callHeaderLayout.visibility = View.GONE
-                            tvCallStatus.text = "Đang truyền hình ảnh HD"
-                        }
-                    }
-                    onCallDisconnected = {
-                        runOnUiThread {
-                            tvCallStatus.text = "Tín hiệu mạng không ổn định..."
-                        }
-                    }
-                }
+                webRtcManager = createWebRtcManager()
             }
 
             // If Video Call is enabled, start local camera preview if not already active

@@ -231,7 +231,17 @@ class HomeActivity : AppCompatActivity() {
         if (myEmail.isBlank()) return
 
         incomingCallListener?.remove()
-        incomingCallListener = com.vhn.connectx.net.FirebaseSyncManager.listenIncomingCall(myEmail) { callId, callerName, callerEmail, isVideo ->
+        incomingCallListener = com.vhn.connectx.net.FirebaseSyncManager.listenIncomingCall(
+            myEmail = myEmail,
+            onNoRinging = {
+                try {
+                    val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+                    nm.cancel(1002)
+                } catch (e: Exception) {
+                    android.util.Log.w("HomeActivity", "Cancel incoming-call notification failed: ${e.message}")
+                }
+            }
+        ) { callId, callerName, callerEmail, isVideo ->
             if (callId == lastHandledCallId) return@listenIncomingCall
             lastHandledCallId = callId
             showIncomingCall(callId, callerName, callerEmail, isVideo)
@@ -395,8 +405,10 @@ class HomeActivity : AppCompatActivity() {
         rvConversations = findViewById(R.id.rvConversations)
         rvConversations.layoutManager = LinearLayoutManager(this)
         conversationAdapter = ConversationAdapter(conversations) { conv ->
-            // Find contact email for this conversation
-            val matchedContact = contacts.find { it.displayName.equals(conv.title, ignoreCase = true) }
+            // Find contact email for this conversation (by conversation id first, then by name)
+            val myEmail = sessionManager.currentUser.email
+            val matchedContact = contacts.find { appDataStore.getDirectConvId(myEmail, it.email) == conv.id }
+                ?: contacts.find { it.displayName.trim().equals(conv.title.trim(), ignoreCase = true) }
             val contactEmail = matchedContact?.email ?: ""
             openChat(conv.id, conv.title, contactEmail)
         }

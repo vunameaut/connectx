@@ -4,6 +4,14 @@ plugins {
     id 'com.google.gms.google-services'
 }
 
+// TURN relay settings live in apps/mobile/android/turn.properties (git-ignored). See turn.properties.example
+def turnProps = new Properties()
+def turnFile = rootProject.file('turn.properties')
+if (turnFile.exists()) {
+    turnFile.withInputStream { turnProps.load(it) }
+}
+def turnValue = { String key -> (turnProps.getProperty(key, '') ?: '').trim().replace('\\', '\\\\').replace('"', '\\"') }
+
 android {
     namespace 'com.vhn.connectx'
     compileSdk 34
@@ -12,8 +20,11 @@ android {
         applicationId "com.vhn.connectx"
         minSdk 26
         targetSdk 34
-        versionCode 16
-        versionName "1.0.15"
+        versionCode 17
+        versionName "1.0.16"
+        buildConfigField "String", "TURN_URLS", "\"${turnValue('turn.urls')}\""
+        buildConfigField "String", "TURN_USERNAME", "\"${turnValue('turn.username')}\""
+        buildConfigField "String", "TURN_CREDENTIAL", "\"${turnValue('turn.credential')}\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 

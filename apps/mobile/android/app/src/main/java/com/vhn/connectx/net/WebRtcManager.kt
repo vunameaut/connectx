@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.media.projection.MediaProjection
 import android.os.Build
 import android.util.Log
+import com.vhn.connectx.BuildConfig
 import org.webrtc.*
 
 /**
@@ -52,6 +53,11 @@ class WebRtcManager(
 
     var onRemoteVideoTrackReady: ((VideoTrack) -> Unit)? = null
     var onCallDisconnected: (() -> Unit)? = null
+    var onIceConnected: (() -> Unit)? = null
+    var onIceFailed: ((String) -> Unit)? = null
+
+    // Diagnostics: which kinds of ICE candidates were gathered locally (host / srflx / relay)
+    private val gatheredCandidateTypes = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     private var audioManager: AudioManager? = null
 
@@ -103,6 +109,11 @@ class WebRtcManager(
      * Khởi tạo Local Camera
      */
     fun startCamera(localRenderer: SurfaceViewRenderer, isFront: Boolean = true) {
+        // Camera may already be running (caller starts preview while ringing)
+        if (cameraCapturer != null && localVideoTrack != null) {
+            Log.i(TAG, "startCamera ignored: camera already running")
+            return
+        }
         try {
             localRenderer.init(eglContext, null)
         } catch (e: Exception) {
@@ -155,37 +166,51 @@ class WebRtcManager(
         return null
     }
 
+    private fun hasTurnConfigured(): Boolean =
+        BuildConfig.TURN_URLS.isNotBlank() && BuildConfig.TURN_USERNAME.isNotBlank() && BuildConfig.TURN_CREDENTIAL.isNotBlank()
+
+    private fun buildIceServers(): List<PeerConnection.IceServer> {
+        val servers = mutableListOf(
+            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun.cloudflare.com:3478").createIceServer()
+        )
+        if (hasTurnConfigured()) {
+            val urls = BuildConfig.TURN_URLS.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            servers.add(
+                PeerConnection.IceServer.builder(urls)
+                    .setUsername(BuildConfig.TURN_USERNAME)
+                    .setPassword(BuildConfig.TURN_CREDENTIAL)
+                    .createIceServer()
+            )
+            Log.i(TAG, "TURN configured: ${urls.size} url(s)")
+        } else {
+            Log.w(TAG, "NO TURN SERVER CONFIGURED - calls across different networks / mobile data will have no media. See apps/mobile/android/turn.properties.example")
+        }
+        return servers
+    }
+
     /**
      * Bắt đầu PeerConnection và kết nối
      */
     fun startPeerConnection(remoteRenderer: SurfaceViewRenderer) {
+        if (peerConnection != null) {
+            Log.i(TAG, "startPeerConnection ignored: already started")
+            return
+        }
         try {
-            remoteRenderer.init(eglContext, null)
+            remoteRenderer.init(eglContext, object : RendererCommon.RendererEvents {
+                override fun onFirstFrameRendered() {
+                    Log.i(TAG, "Remote video: first frame rendered")
+                    remoteVideoTrack?.let { onRemoteVideoTrackReady?.invoke(it) }
+                }
+                override fun onFrameResolutionChanged(videoWidth: Int, videoHeight: Int, rotation: Int) {}
+            })
         } catch (e: Exception) {
             Log.w(TAG, "remoteRenderer already initialized: ${e.message}")
         }
 
-        val iceServers = listOf(
-            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
-            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
-            PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
-            PeerConnection.IceServer.builder("stun:stun3.l.google.com:19302").createIceServer(),
-            PeerConnection.IceServer.builder("stun:stun4.l.google.com:19302").createIceServer(),
-            PeerConnection.IceServer.builder("stun:stun.cloudflare.com:3478").createIceServer(),
-            PeerConnection.IceServer.builder("stun:stun.relay.metered.ca:80").createIceServer(),
-            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:80")
-                .setUsername("openrelayproject")
-                .setPassword("openrelayproject")
-                .createIceServer(),
-            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:443")
-                .setUsername("openrelayproject")
-                .setPassword("openrelayproject")
-                .createIceServer(),
-            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:443?transport=tcp")
-                .setUsername("openrelayproject")
-                .setPassword("openrelayproject")
-                .createIceServer()
-        )
+        val iceServers = buildIceServers()
 
         val rtcConfig = PeerConnection.RTCConfiguration(iceServers).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
@@ -195,6 +220,9 @@ class WebRtcManager(
         peerConnection = peerConnectionFactory?.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
             override fun onIceCandidate(candidate: IceCandidate?) {
                 if (candidate != null && !candidate.sdp.isNullOrBlank()) {
+                    val type = Regex(" typ (\\w+)").find(candidate.sdp)?.groupValues?.get(1) ?: "?"
+                    gatheredCandidateTypes.add(type)
+                    Log.d(TAG, "Local ICE candidate [$type]: ${candidate.sdp}")
                     val myRole = if (isCaller) "CALLER" else "CALLEE"
                     FirebaseSyncManager.sendIceCandidate(
                         callId = callId,
@@ -211,7 +239,7 @@ class WebRtcManager(
                 if (track is VideoTrack) {
                     remoteVideoTrack = track
                     remoteVideoTrack?.addSink(remoteRenderer)
-                    onRemoteVideoTrackReady?.invoke(track)
+                    // The UI is told when the first real frame is rendered (RendererEvents above)
                 } else if (track is AudioTrack) {
                     remoteAudioTrack = track
                     remoteAudioTrack?.setEnabled(true)
@@ -224,7 +252,6 @@ class WebRtcManager(
                         val track = stream.videoTracks[0]
                         remoteVideoTrack = track
                         remoteVideoTrack?.addSink(remoteRenderer)
-                        onRemoteVideoTrackReady?.invoke(track)
                     }
                     if (stream.audioTracks.isNotEmpty() && remoteAudioTrack == null) {
                         remoteAudioTrack = stream.audioTracks[0]
@@ -234,18 +261,27 @@ class WebRtcManager(
             }
 
             override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {
-                Log.d(TAG, "ICE Connection State: $newState")
-                // Không ngắt cuộc gọi ngay khi DISCONNECTED hoặc FAILED để cho phép WebRTC tự động tái kết nối
+                Log.d(TAG, "ICE Connection State: $newState (local candidate types=$gatheredCandidateTypes)")
+                // Không ngắt cuộc gọi ngay khi DISCONNECTED để cho phép WebRTC tự động tái kết nối
                 when (newState) {
                     PeerConnection.IceConnectionState.CONNECTED,
                     PeerConnection.IceConnectionState.COMPLETED -> {
                         Log.i(TAG, "WebRTC media channel connected successfully")
+                        onIceConnected?.invoke()
                     }
                     PeerConnection.IceConnectionState.DISCONNECTED -> {
                         Log.w(TAG, "WebRTC ICE temporarily disconnected, maintaining call session...")
                     }
                     PeerConnection.IceConnectionState.FAILED -> {
-                        Log.e(TAG, "WebRTC ICE connection failed, retrying...")
+                        val reason = if (!hasTurnConfigured()) {
+                            "Không kết nối được hình ảnh: mạng của 2 máy chặn kết nối trực tiếp và app chưa cấu hình máy chủ TURN."
+                        } else if (!gatheredCandidateTypes.contains("relay")) {
+                            "Không kết nối được hình ảnh: máy chủ TURN không phản hồi (sai thông tin hoặc bị chặn mạng)."
+                        } else {
+                            "Không kết nối được hình ảnh: mạng không ổn định, hãy thử gọi lại."
+                        }
+                        Log.e(TAG, reason)
+                        onIceFailed?.invoke(reason)
                     }
                     PeerConnection.IceConnectionState.CLOSED -> {
                         onCallDisconnected?.invoke()
