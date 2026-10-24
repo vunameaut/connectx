@@ -92,7 +92,22 @@ class ChatActivity : AppCompatActivity() {
         }
 
         btnAttachment.setOnClickListener {
-            Toast.makeText(this, "Chia sẻ ảnh hoặc tài liệu đính kèm", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Chia sẻ ảnh từ thư viện hoặc chụp ảnh mới", Toast.LENGTH_SHORT).show()
+        }
+
+        val btnEmoji: ImageView = findViewById(R.id.btnEmoji)
+        btnEmoji.setOnClickListener {
+            etMessageInput.append(" 😊")
+        }
+
+        val btnVoiceRecord: ImageView = findViewById(R.id.btnVoiceRecord)
+        btnVoiceRecord.setOnClickListener {
+            Toast.makeText(this, "Nhấn giữ để ghi âm tin nhắn thoại...", Toast.LENGTH_SHORT).show()
+        }
+
+        val btnChatMore: ImageView = findViewById(R.id.btnChatMore)
+        btnChatMore.setOnClickListener {
+            Toast.makeText(this, "Tùy chọn: Tìm kiếm tin nhắn, Đổi hình nền, Thông tin bạn bè", Toast.LENGTH_SHORT).show()
         }
     }
 

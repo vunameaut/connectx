@@ -3,6 +3,7 @@ package com.vhn.connectx.adapter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.vhn.connectx.R
@@ -19,6 +20,8 @@ class ConversationAdapter(
         val tvTime: TextView = view.findViewById(R.id.tvConvTime)
         val tvLastMessage: TextView = view.findViewById(R.id.tvConvLastMessage)
         val tvUnreadBadge: TextView = view.findViewById(R.id.tvConvUnreadBadge)
+        val ivVerifiedBadge: ImageView = view.findViewById(R.id.ivVerifiedBadge)
+        val viewOnlineDot: View = view.findViewById(R.id.viewOnlineDot)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -32,6 +35,9 @@ class ConversationAdapter(
         holder.tvTitle.text = item.title
         holder.tvTime.text = item.timestamp
         holder.tvLastMessage.text = item.lastMessage
+
+        holder.ivVerifiedBadge.visibility = if (!item.isGroup) View.VISIBLE else View.GONE
+        holder.viewOnlineDot.visibility = if (!item.isGroup) View.VISIBLE else View.GONE
 
         if (item.unreadCount > 0) {
             holder.tvUnreadBadge.visibility = View.VISIBLE

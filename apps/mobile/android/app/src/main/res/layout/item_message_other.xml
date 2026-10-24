@@ -5,13 +5,13 @@
     android:orientation="horizontal"
     android:gravity="top"
     android:paddingVertical="4dp"
-    android:paddingStart="8dp"
+    android:paddingStart="12dp"
     android:paddingEnd="64dp">
 
     <TextView
         android:id="@+id/tvMessageOtherAvatar"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
         android:background="@drawable/bg_card_secondary"
         android:text="B"
         android:textColor="@color/white"
@@ -25,9 +25,8 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/bg_message_other"
-        android:paddingVertical="10dp"
-        android:paddingHorizontal="14dp"
-        android:layout_marginStart="8dp">
+        android:layout_marginStart="8dp"
+        android:elevation="1dp">
 
         <TextView
             android:id="@+id/tvMessageTextOther"
@@ -35,7 +34,8 @@
             android:layout_height="wrap_content"
             android:text="Được chứ, mình đang bật chức năng chia sẻ màn hình qua cuộc gọi video đây."
             android:textColor="@color/text_primary"
-            android:textSize="15sp" />
+            android:textSize="15sp"
+            android:lineSpacingExtra="2dp" />
 
         <TextView
             android:id="@+id/tvMessageTimeOther"

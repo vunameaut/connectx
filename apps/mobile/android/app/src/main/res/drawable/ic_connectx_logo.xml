@@ -1,0 +1,61 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+
+    <!-- Outer Glow / Background Circle -->
+    <path
+        android:pathData="M48,8C25.91,8 8,25.91 8,48c0,22.09 17.91,40 40,40c22.09,0 40,-17.91 40,-40C88,25.91 70.09,8 48,8z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="8"
+                android:startY="8"
+                android:endX="88"
+                android:endY="88"
+                android:type="linear">
+                <item android:color="#0284C7" android:offset="0.0" />
+                <item android:color="#0369A1" android:offset="0.5" />
+                <item android:color="#090D16" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Chat Bubble Body -->
+    <path
+        android:pathData="M66,42c0,-11.05 -8.95,-20 -20,-20 -11.05,0 -20,8.95 -20,20 0,3.95 1.15,7.63 3.12,10.74L26,62l10.35,-2.95C39.11,60.8 42.44,62 46,62c11.05,0 20,-8.95 20,-20z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="26"
+                android:startY="22"
+                android:endX="66"
+                android:endY="62"
+                android:type="linear">
+                <item android:color="#FFFFFF" android:offset="0.0" />
+                <item android:color="#E0F2FE" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Connect 'X' Nodes (Left-Right interconnection) -->
+    <path
+        android:pathData="M38,34l8,8 -8,8"
+        android:strokeWidth="3.5"
+        android:strokeColor="#0284C7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <path
+        android:pathData="M54,34l-8,8 8,8"
+        android:strokeWidth="3.5"
+        android:strokeColor="#06B6D4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Center Energy Node -->
+    <path
+        android:pathData="M46,42m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0"
+        android:fillColor="#0284C7" />
+
+</vector>

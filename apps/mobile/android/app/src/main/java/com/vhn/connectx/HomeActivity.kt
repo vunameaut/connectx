@@ -17,6 +17,7 @@ import com.google.android.material.button.MaterialButton
 import com.vhn.connectx.adapter.CallHistoryAdapter
 import com.vhn.connectx.adapter.ContactAdapter
 import com.vhn.connectx.adapter.ConversationAdapter
+import com.vhn.connectx.adapter.StoryAdapter
 import com.vhn.connectx.model.CallHistoryItem
 import com.vhn.connectx.model.Conversation
 import com.vhn.connectx.model.SessionManager
@@ -29,7 +30,6 @@ class HomeActivity : AppCompatActivity() {
 
     // Views
     private lateinit var tvHeaderTitle: TextView
-    private lateinit var tvUserAvatar: TextView
     private lateinit var btnSearch: ImageView
     private lateinit var btnAddAction: ImageView
 
@@ -40,6 +40,10 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var bottomNav: BottomNavigationView
 
     // Tab 1: Chats
+    private lateinit var rvOnlineStories: RecyclerView
+    private lateinit var storyAdapter: StoryAdapter
+    private val onlineUsers = mutableListOf<User>()
+
     private lateinit var rvConversations: RecyclerView
     private lateinit var conversationAdapter: ConversationAdapter
     private val conversations = mutableListOf<Conversation>()
@@ -86,7 +90,6 @@ class HomeActivity : AppCompatActivity() {
 
     private fun initViews() {
         tvHeaderTitle = findViewById(R.id.tvHeaderTitle)
-        tvUserAvatar = findViewById(R.id.tvUserAvatar)
         btnSearch = findViewById(R.id.btnSearch)
         btnAddAction = findViewById(R.id.btnAddAction)
 
@@ -96,11 +99,16 @@ class HomeActivity : AppCompatActivity() {
         viewProfile = findViewById(R.id.viewProfile)
         bottomNav = findViewById(R.id.bottomNavigation)
 
-        // Setup User Avatar
         val user = sessionManager.currentUser
-        tvUserAvatar.text = user.displayName.take(1).uppercase()
 
-        // Tab 1
+        // Tab 1: Chats
+        rvOnlineStories = findViewById(R.id.rvOnlineStories)
+        rvOnlineStories.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        storyAdapter = StoryAdapter(onlineUsers) { user ->
+            openChat("c_${user.id}", user.displayName)
+        }
+        rvOnlineStories.adapter = storyAdapter
+
         rvConversations = findViewById(R.id.rvConversations)
         rvConversations.layoutManager = LinearLayoutManager(this)
         conversationAdapter = ConversationAdapter(conversations) { conv ->
@@ -196,6 +204,16 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun loadInitialData() {
+        // Active online friends for horizontal story row
+        onlineUsers.clear()
+        onlineUsers.add(User("u1", "Nguyễn Văn An", "an.nguyen@example.com"))
+        onlineUsers.add(User("u2", "Trần Thu Hà", "ha.tran@example.com"))
+        onlineUsers.add(User("u3", "Lê Minh Trí", "tri.le@example.com"))
+        onlineUsers.add(User("u4", "Phạm Quốc Bảo", "bao.pham@example.com"))
+        onlineUsers.add(User("u5", "Hoàng Kim Ngân", "ngan.hoang@example.com"))
+        onlineUsers.add(User("u6", "Đặng Minh Quân", "quan.dang@example.com"))
+        storyAdapter.notifyDataSetChanged()
+
         // Mock sample initial chat conversations
         conversations.clear()
         conversations.add(Conversation("c1", "Nguyễn Văn An", "Alo bạn ơi, lát họp chia sẻ màn hình dự án nhé!", "14:35", 2))
