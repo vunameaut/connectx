@@ -44,8 +44,8 @@ export async function buildServer(): Promise<FastifyInstance> {
       minSupportedVersion: '1.0.1',
       updateRequired: true,
       forceUpdate: true,
-      releaseNotes: 'Bản cập nhật bắt buộc: Nâng cấp bảo mật Firebase Auth, Supabase DB & Cloudinary Media.',
-      downloadUrl: 'https://github.com/vhn/connectx/releases/latest',
+      releaseNotes: 'Bản cập nhật bắt buộc v1.0.1: Chuyển sang dữ liệu thực tế, tối ưu WebRTC và hỗ trợ giao diện Sáng/Tối.',
+      downloadUrl: 'https://github.com/vunameaut/connectx/releases/download/v1.0.1/ConnectX-v1.0.1.apk',
       publishedAt: new Date().toISOString(),
     };
   });

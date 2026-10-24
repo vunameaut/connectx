@@ -54,7 +54,7 @@ object UpdateManager {
     private const val TAG = "UpdateManager"
 
     // Default GitHub repo coordinates
-    var githubRepo: String = "vhn/connectx"
+    var githubRepo: String = "vunameaut/connectx"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
