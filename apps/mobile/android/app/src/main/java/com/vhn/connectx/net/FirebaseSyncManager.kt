@@ -388,5 +388,90 @@ object FirebaseSyncManager {
             null
         }
     }
+
+    /**
+     * Gửi Session Description (Offer hoặc Answer) lên Firestore cho cuộc gọi.
+     */
+    fun sendCallSdp(callId: String, type: String, sdpDescription: String) {
+        if (callId.isBlank()) return
+        val field = if (type.equals("offer", ignoreCase = true)) "offerSdp" else "answerSdp"
+        firestore.collection("active_calls")
+            .document(callId)
+            .update(field, sdpDescription)
+    }
+
+    /**
+     * Lắng nghe Remote Session Description (Offer hoặc Answer).
+     */
+    fun listenCallSdp(
+        callId: String,
+        targetType: String,
+        onSdpReceived: (sdp: String) -> Unit
+    ): ListenerRegistration? {
+        if (callId.isBlank()) return null
+        val field = if (targetType.equals("offer", ignoreCase = true)) "offerSdp" else "answerSdp"
+        return try {
+            firestore.collection("active_calls")
+                .document(callId)
+                .addSnapshotListener { snapshot, _ ->
+                    val sdp = snapshot?.getString(field) ?: ""
+                    if (sdp.isNotBlank()) {
+                        onSdpReceived(sdp)
+                    }
+                }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Gửi ICE Candidate đến subcollection của cuộc gọi.
+     */
+    fun sendIceCandidate(callId: String, senderRole: String, sdpMid: String, sdpMLineIndex: Int, candidate: String) {
+        if (callId.isBlank()) return
+        val data = hashMapOf(
+            "senderRole" to senderRole,
+            "sdpMid" to sdpMid,
+            "sdpMLineIndex" to sdpMLineIndex,
+            "candidate" to candidate,
+            "createdAt" to System.currentTimeMillis()
+        )
+        firestore.collection("active_calls")
+            .document(callId)
+            .collection("candidates")
+            .add(data)
+    }
+
+    /**
+     * Lắng nghe ICE Candidates từ đối phương.
+     */
+    fun listenRemoteIceCandidates(
+        callId: String,
+        targetRole: String,
+        onCandidateReceived: (sdpMid: String, sdpMLineIndex: Int, candidate: String) -> Unit
+    ): ListenerRegistration? {
+        if (callId.isBlank()) return null
+        return try {
+            firestore.collection("active_calls")
+                .document(callId)
+                .collection("candidates")
+                .whereEqualTo("senderRole", targetRole)
+                .addSnapshotListener { snapshot, _ ->
+                    if (snapshot == null) return@addSnapshotListener
+                    for (doc in snapshot.documentChanges) {
+                        if (doc.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                            val mid = doc.document.getString("sdpMid") ?: ""
+                            val index = doc.document.getLong("sdpMLineIndex")?.toInt() ?: 0
+                            val cand = doc.document.getString("candidate") ?: ""
+                            if (cand.isNotBlank()) {
+                                onCandidateReceived(mid, index, cand)
+                            }
+                        }
+                    }
+                }
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
 

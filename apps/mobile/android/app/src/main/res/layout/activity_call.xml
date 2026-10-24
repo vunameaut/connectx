@@ -12,6 +12,31 @@
         android:layout_height="match_parent"
         android:background="#060912">
 
+        <!-- Remote WebRTC Video / Screen Share View -->
+        <org.webrtc.SurfaceViewRenderer
+            android:id="@+id/remoteVideoView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <!-- Local Camera PIP Preview -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardLocalVideo"
+            android:layout_width="120dp"
+            android:layout_height="170dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="100dp"
+            android:layout_marginEnd="16dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="8dp"
+            android:visibility="gone">
+
+            <org.webrtc.SurfaceViewRenderer
+                android:id="@+id/localVideoView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </androidx.cardview.widget.CardView>
+
         <!-- Screen Share Active Banner -->
         <LinearLayout
             android:id="@+id/layoutScreenShareBanner"

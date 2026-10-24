@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -46,6 +47,12 @@ class CallActivity : AppCompatActivity() {
     private lateinit var tvScreenShareLabel: TextView
     private lateinit var btnEndCall: FloatingActionButton
 
+    // WebRTC Video Surfaces
+    private lateinit var remoteVideoView: org.webrtc.SurfaceViewRenderer
+    private lateinit var localVideoView: org.webrtc.SurfaceViewRenderer
+    private lateinit var cardLocalVideo: androidx.cardview.widget.CardView
+    private lateinit var callHeaderLayout: LinearLayout
+
     // Incoming Call Controls
     private lateinit var layoutIncomingCallActions: LinearLayout
     private lateinit var btnAcceptCall: FloatingActionButton
@@ -53,6 +60,7 @@ class CallActivity : AppCompatActivity() {
 
     private lateinit var screenCaptureModule: ScreenCaptureModule
     private lateinit var sessionManager: SessionManager
+    private var webRtcManager: com.vhn.connectx.net.WebRtcManager? = null
 
     private var isMicMuted = false
     private var isVideoEnabled = true
@@ -185,6 +193,10 @@ class CallActivity : AppCompatActivity() {
         layoutIncomingCallActions = findViewById(R.id.layoutIncomingCallActions)
         btnAcceptCall = findViewById(R.id.btnAcceptCall)
         btnDeclineCall = findViewById(R.id.btnDeclineCall)
+        remoteVideoView = findViewById(R.id.remoteVideoView)
+        localVideoView = findViewById(R.id.localVideoView)
+        cardLocalVideo = findViewById(R.id.cardLocalVideo)
+        callHeaderLayout = findViewById(R.id.callHeaderLayout)
 
         tvCallContactName.text = contactName
         tvCallAvatar.text = contactName.ifBlank { "U" }.take(1).uppercase()
@@ -283,11 +295,51 @@ class CallActivity : AppCompatActivity() {
         tvCallTimer.text = "00:00"
         timerHandler.removeCallbacks(timerRunnable)
         timerHandler.postDelayed(timerRunnable, 1000)
+
+        // Initialize WebRTC Engine
+        setupWebRtcMedia()
+    }
+
+    private fun setupWebRtcMedia() {
+        if (webRtcManager != null) return
+
+        webRtcManager = com.vhn.connectx.net.WebRtcManager(
+            context = applicationContext,
+            callId = callId,
+            isCaller = !isIncoming
+        ).apply {
+            onRemoteVideoTrackReady = {
+                runOnUiThread {
+                    remoteVideoView.visibility = View.VISIBLE
+                    callHeaderLayout.visibility = View.GONE
+                }
+            }
+            onCallDisconnected = {
+                runOnUiThread {
+                    Toast.makeText(this@CallActivity, "Kết nối cuộc gọi bị ngắt", Toast.LENGTH_SHORT).show()
+                    endCall()
+                }
+            }
+        }
+
+        // If Video Call is enabled, start local camera preview
+        if (isVideoEnabled) {
+            try {
+                webRtcManager?.startCamera(localVideoView, isFront = true)
+                cardLocalVideo.visibility = View.VISIBLE
+            } catch (e: Exception) {
+                Log.e("CallActivity", "Error starting camera: ${e.message}")
+            }
+        }
+
+        // Start PeerConnection & Audio/Video streaming
+        webRtcManager?.startPeerConnection(remoteVideoView)
     }
 
     private fun setupCallControls() {
         btnToggleMic.setOnClickListener {
             isMicMuted = !isMicMuted
+            webRtcManager?.toggleMicrophone(!isMicMuted)
             if (isMicMuted) {
                 tvMicLabel.text = "Tắt mic"
                 btnToggleMic.backgroundTintList = getColorStateList(R.color.call_red)
@@ -301,6 +353,8 @@ class CallActivity : AppCompatActivity() {
 
         btnToggleVideo.setOnClickListener {
             isVideoEnabled = !isVideoEnabled
+            webRtcManager?.toggleCamera(isVideoEnabled)
+            cardLocalVideo.visibility = if (isVideoEnabled) View.VISIBLE else View.GONE
             if (isVideoEnabled) {
                 tvVideoLabel.text = "Camera"
                 btnToggleVideo.backgroundTintList = getColorStateList(R.color.bg_card_secondary)
@@ -322,6 +376,7 @@ class CallActivity : AppCompatActivity() {
                     }
                 }
             } else {
+                webRtcManager?.stopScreenShare()
                 screenCaptureModule.stopCapture()
             }
         }
@@ -334,6 +389,13 @@ class CallActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         screenCaptureModule.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == ScreenCaptureModule.REQUEST_CODE_MEDIA_PROJECTION && resultCode == RESULT_OK && data != null) {
+            try {
+                webRtcManager?.startScreenShare(resultCode, data)
+            } catch (e: Exception) {
+                Log.e("CallActivity", "Error starting WebRTC screen share: ${e.message}")
+            }
+        }
     }
 
     private fun updateScreenShareUI(isSharing: Boolean, bannerText: String) {
@@ -356,10 +418,13 @@ class CallActivity : AppCompatActivity() {
     private fun endCall() {
         ringtone?.stop()
         if (isScreenSharing) {
+            webRtcManager?.stopScreenShare()
             screenCaptureModule.stopCapture()
         }
         timerHandler.removeCallbacks(timerRunnable)
         FirebaseSyncManager.updateCallStatus(callId, "ENDED")
+        webRtcManager?.cleanup()
+        webRtcManager = null
         Toast.makeText(this, "Cuộc gọi đã kết thúc", Toast.LENGTH_SHORT).show()
         finish()
     }
@@ -374,6 +439,8 @@ class CallActivity : AppCompatActivity() {
         } catch (e: Exception) {
             // Already unregistered
         }
+        webRtcManager?.cleanup()
+        webRtcManager = null
         screenCaptureModule.cleanup()
     }
 }
