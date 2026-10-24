@@ -790,8 +790,15 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun startCall(contactName: String, contactEmail: String = "", isVideo: Boolean) {
-        val resolvedEmail = if (contactEmail.isNotBlank()) contactEmail else {
-            contacts.find { it.displayName.equals(contactName, ignoreCase = true) }?.email ?: ""
+        val resolvedEmail = if (contactEmail.isNotBlank()) {
+            contactEmail.trim().lowercase()
+        } else {
+            contacts.find { it.displayName.trim().equals(contactName.trim(), ignoreCase = true) }?.email?.trim()?.lowercase() ?: ""
+        }
+
+        if (resolvedEmail.isBlank()) {
+            Toast.makeText(this, "Không tìm thấy thông tin liên lạc của $contactName", Toast.LENGTH_SHORT).show()
+            return
         }
 
         val callId = "call_${System.currentTimeMillis()}"

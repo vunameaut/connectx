@@ -483,8 +483,9 @@ object FirebaseSyncManager {
                         val isVideo = doc.getBoolean("isVideo") ?: true
                         val createdAt = doc.getLong("createdAt") ?: 0L
 
-                        // Chỉ chấp nhận cuộc gọi trong vòng 60 giây gần nhất
-                        if (System.currentTimeMillis() - createdAt < 60000) {
+                        // Cho phép chênh lệch thời gian máy ảo và máy thật lên tới 3 phút (hoặc cuộc gọi mới tạo)
+                        val timeDiff = Math.abs(System.currentTimeMillis() - createdAt)
+                        if (createdAt == 0L || timeDiff < 180000) {
                             onIncomingCall(callId, callerName, callerEmail, isVideo)
                             break
                         }
@@ -496,13 +497,13 @@ object FirebaseSyncManager {
     }
 
     /**
-     * Cập nhật trạng thái cuộc gọi (ACCEPTED, DECLINED, ENDED).
+     * Cập nhật trạng thái cuộc gọi (ACCEPTED, DECLINED, ENDED, MISSED).
      */
     fun updateCallStatus(callId: String, status: String, onComplete: ((Boolean) -> Unit)? = null) {
         if (callId.isBlank()) return
         firestore.collection("active_calls")
             .document(callId)
-            .update("status", status)
+            .set(mapOf("status" to status), com.google.firebase.firestore.SetOptions.merge())
             .addOnSuccessListener { onComplete?.invoke(true) }
             .addOnFailureListener { onComplete?.invoke(false) }
     }

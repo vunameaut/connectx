@@ -95,6 +95,18 @@ class CallActivity : AppCompatActivity() {
         }
     }
 
+    private val ringingTimeoutHandler = Handler(Looper.getMainLooper())
+    private val CALL_TIMEOUT_MS = 35000L // 35 seconds ringing timeout
+
+    private fun dismissNotification() {
+        try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            nm.cancel(1002)
+        } catch (e: Exception) {
+            // Ignore
+        }
+    }
+
     private val captureReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val action = intent?.action ?: return
@@ -156,6 +168,7 @@ class CallActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         isCallActive = true
+        dismissNotification()
 
         // Wake screen and show over lockscreen like Zalo / WhatsApp
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -264,6 +277,36 @@ class CallActivity : AppCompatActivity() {
         callControlsBar.visibility = View.VISIBLE
         layoutIncomingCallActions.visibility = View.GONE
 
+        // Start local camera preview immediately so caller can see themselves while waiting
+        if (isVideoEnabled) {
+            try {
+                if (webRtcManager == null) {
+                    webRtcManager = com.vhn.connectx.net.WebRtcManager(
+                        context = applicationContext,
+                        callId = callId,
+                        isCaller = true
+                    ).apply {
+                        onRemoteVideoTrackReady = {
+                            runOnUiThread {
+                                remoteVideoView.visibility = View.VISIBLE
+                                callHeaderLayout.visibility = View.GONE
+                                tvCallStatus.text = "Đang truyền hình ảnh HD"
+                            }
+                        }
+                        onCallDisconnected = {
+                            runOnUiThread {
+                                tvCallStatus.text = "Tín hiệu mạng không ổn định..."
+                            }
+                        }
+                    }
+                }
+                webRtcManager?.startCamera(localVideoView, isFront = true)
+                cardLocalVideo.visibility = View.VISIBLE
+            } catch (e: Exception) {
+                Log.w("CallActivity", "Error starting camera preview during outgoing call: ${e.message}")
+            }
+        }
+
         // Send initiateCall to Firestore
         val myUser = sessionManager.currentUser
         if (contactEmail.isNotBlank()) {
@@ -275,6 +318,17 @@ class CallActivity : AppCompatActivity() {
                 isVideo = isVideoEnabled
             ) {}
         }
+
+        // Set 35s timeout if callee doesn't answer
+        ringingTimeoutHandler.removeCallbacksAndMessages(null)
+        ringingTimeoutHandler.postDelayed({
+            if (!isCallAccepted && !isFinishing && !isDestroyed) {
+                tvCallStatus.text = "Người nhận không trả lời"
+                FirebaseSyncManager.updateCallStatus(callId, "MISSED")
+                Toast.makeText(this, "Không có phản hồi từ đối phương (Hết thời gian chờ)", Toast.LENGTH_SHORT).show()
+                Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
+            }
+        }, CALL_TIMEOUT_MS)
 
         // Listen for recipient response
         listenCallStatusUpdates()
@@ -295,8 +349,22 @@ class CallActivity : AppCompatActivity() {
             e.printStackTrace()
         }
 
+        // Set 35s ringing timeout for callee
+        ringingTimeoutHandler.removeCallbacksAndMessages(null)
+        ringingTimeoutHandler.postDelayed({
+            if (!isCallAccepted && !isFinishing && !isDestroyed) {
+                ringtone?.stop()
+                dismissNotification()
+                tvCallStatus.text = "Cuộc gọi nhỡ"
+                Toast.makeText(this, "Cuộc gọi nhỡ từ $contactName", Toast.LENGTH_SHORT).show()
+                Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
+            }
+        }, CALL_TIMEOUT_MS)
+
         btnAcceptCall.setOnClickListener {
             ringtone?.stop()
+            dismissNotification()
+            ringingTimeoutHandler.removeCallbacksAndMessages(null)
             isCallAccepted = true
             FirebaseSyncManager.updateCallStatus(callId, "ACCEPTED")
             onCallConnected()
@@ -304,6 +372,8 @@ class CallActivity : AppCompatActivity() {
 
         btnDeclineCall.setOnClickListener {
             ringtone?.stop()
+            dismissNotification()
+            ringingTimeoutHandler.removeCallbacksAndMessages(null)
             FirebaseSyncManager.updateCallStatus(callId, "DECLINED")
             Toast.makeText(this, "Đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
             finish()
@@ -316,24 +386,40 @@ class CallActivity : AppCompatActivity() {
     private fun listenCallStatusUpdates() {
         callStatusListener?.remove()
         callStatusListener = FirebaseSyncManager.listenCallStatus(callId) { status ->
-            when (status) {
-                "ACCEPTED" -> {
-                    if (!isCallAccepted) {
-                        onCallConnected()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                when (status) {
+                    "ACCEPTED" -> {
+                        if (!isCallAccepted) {
+                            ringingTimeoutHandler.removeCallbacksAndMessages(null)
+                            onCallConnected()
+                        }
                     }
-                }
-                "DECLINED" -> {
-                    ringtone?.stop()
-                    tvCallStatus.text = "Đối phương bận máy"
-                    Toast.makeText(this, "Đối phương đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
-                    Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
-                }
-                "ENDED" -> {
-                    ringtone?.stop()
-                    tvCallStatus.text = "Cuộc gọi đã kết thúc"
-                    timerHandler.removeCallbacks(timerRunnable)
-                    Toast.makeText(this, "Cuộc gọi đã kết thúc", Toast.LENGTH_SHORT).show()
-                    Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1000)
+                    "DECLINED" -> {
+                        ringtone?.stop()
+                        dismissNotification()
+                        ringingTimeoutHandler.removeCallbacksAndMessages(null)
+                        tvCallStatus.text = "Đối phương bận máy"
+                        Toast.makeText(this, "Đối phương đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
+                        Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
+                    }
+                    "MISSED" -> {
+                        ringtone?.stop()
+                        dismissNotification()
+                        ringingTimeoutHandler.removeCallbacksAndMessages(null)
+                        tvCallStatus.text = "Người nhận không trả lời"
+                        Toast.makeText(this, "Không có phản hồi từ đối phương", Toast.LENGTH_SHORT).show()
+                        Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
+                    }
+                    "ENDED" -> {
+                        ringtone?.stop()
+                        dismissNotification()
+                        ringingTimeoutHandler.removeCallbacksAndMessages(null)
+                        tvCallStatus.text = "Cuộc gọi đã kết thúc"
+                        timerHandler.removeCallbacks(timerRunnable)
+                        Toast.makeText(this, "Cuộc gọi đã kết thúc", Toast.LENGTH_SHORT).show()
+                        Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1000)
+                    }
                 }
             }
         }
@@ -342,6 +428,8 @@ class CallActivity : AppCompatActivity() {
     private fun onCallConnected() {
         isCallAccepted = true
         ringtone?.stop()
+        dismissNotification()
+        ringingTimeoutHandler.removeCallbacksAndMessages(null)
         callControlsBar.visibility = View.VISIBLE
         layoutIncomingCallActions.visibility = View.GONE
         tvCallStatus.text = if (isVideoEnabled) "Đã kết nối • Video HD (WebRTC TURN)" else "Đã kết nối • Thoại HD (WebRTC)"
@@ -357,29 +445,29 @@ class CallActivity : AppCompatActivity() {
     }
 
     private fun setupWebRtcMedia() {
-        if (webRtcManager != null) return
-
         try {
-            webRtcManager = com.vhn.connectx.net.WebRtcManager(
-                context = applicationContext,
-                callId = callId,
-                isCaller = !isIncoming
-            ).apply {
-                onRemoteVideoTrackReady = {
-                    runOnUiThread {
-                        remoteVideoView.visibility = View.VISIBLE
-                        callHeaderLayout.visibility = View.GONE
-                        tvCallStatus.text = "Đang truyền hình ảnh HD"
+            if (webRtcManager == null) {
+                webRtcManager = com.vhn.connectx.net.WebRtcManager(
+                    context = applicationContext,
+                    callId = callId,
+                    isCaller = !isIncoming
+                ).apply {
+                    onRemoteVideoTrackReady = {
+                        runOnUiThread {
+                            remoteVideoView.visibility = View.VISIBLE
+                            callHeaderLayout.visibility = View.GONE
+                            tvCallStatus.text = "Đang truyền hình ảnh HD"
+                        }
                     }
-                }
-                onCallDisconnected = {
-                    runOnUiThread {
-                        tvCallStatus.text = "Tín hiệu mạng không ổn định..."
+                    onCallDisconnected = {
+                        runOnUiThread {
+                            tvCallStatus.text = "Tín hiệu mạng không ổn định..."
+                        }
                     }
                 }
             }
 
-            // If Video Call is enabled, start local camera preview
+            // If Video Call is enabled, start local camera preview if not already active
             if (isVideoEnabled) {
                 try {
                     webRtcManager?.startCamera(localVideoView, isFront = true)
@@ -478,6 +566,8 @@ class CallActivity : AppCompatActivity() {
 
     private fun endCall() {
         ringtone?.stop()
+        dismissNotification()
+        ringingTimeoutHandler.removeCallbacksAndMessages(null)
         if (isScreenSharing) {
             webRtcManager?.stopScreenShare()
             screenCaptureModule.stopCapture()
@@ -494,6 +584,8 @@ class CallActivity : AppCompatActivity() {
         super.onDestroy()
         isCallActive = false
         ringtone?.stop()
+        dismissNotification()
+        ringingTimeoutHandler.removeCallbacksAndMessages(null)
         callStatusListener?.remove()
         timerHandler.removeCallbacks(timerRunnable)
         try {
