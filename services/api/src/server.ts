@@ -39,13 +39,13 @@ export async function buildServer(): Promise<FastifyInstance> {
   // App Version & In-App Auto-Update Endpoint (Mandatory Force Update)
   server.get('/api/v1/app/version', async () => {
     return {
-      versionCode: 3,
-      versionName: '1.0.2',
-      minSupportedVersion: '1.0.2',
+      versionCode: 4,
+      versionName: '1.0.3',
+      minSupportedVersion: '1.0.3',
       updateRequired: true,
       forceUpdate: true,
-      releaseNotes: 'Bản cập nhật bắt buộc v1.0.2: Hoàn thiện luồng kết bạn 2 chiều (gửi lời mời & đồng ý), đồng bộ tin nhắn hai chiều thời gian thực, gửi ảnh thật từ thư viện máy, đầy đủ icon đa phương tiện và chọn người trước khi gọi.',
-      downloadUrl: 'https://github.com/vunameaut/connectx/releases/download/v1.0.2/ConnectX-v1.0.2.apk',
+      releaseNotes: 'Bản cập nhật v1.0.3: Thêm tính năng xóa bạn bè, nút xóa sạch dữ liệu test để thử nghiệm lại, và tạo lời mời kết bạn mẫu kiểm tra trên 1 máy.',
+      downloadUrl: 'https://github.com/vunameaut/connectx/releases/download/v1.0.3/ConnectX-v1.0.3.apk',
       publishedAt: new Date().toISOString(),
     };
   });

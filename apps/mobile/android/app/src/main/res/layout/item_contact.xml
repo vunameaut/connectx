@@ -71,13 +71,25 @@
     <!-- Quick Action: Call -->
     <ImageView
         android:id="@+id/btnQuickCall"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:padding="9dp"
-        android:layout_marginStart="10dp"
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:padding="8dp"
+        android:layout_marginStart="8dp"
         android:background="@drawable/bg_card_rounded"
         android:src="@drawable/ic_calls"
         app:tint="@color/status_online"
         android:contentDescription="Gọi điện" />
+
+    <!-- Action: Delete Contact -->
+    <ImageView
+        android:id="@+id/btnDeleteContact"
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:padding="8dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/bg_card_rounded"
+        android:src="@drawable/ic_delete"
+        app:tint="@color/call_red"
+        android:contentDescription="Xóa bạn bè" />
 
 </LinearLayout>

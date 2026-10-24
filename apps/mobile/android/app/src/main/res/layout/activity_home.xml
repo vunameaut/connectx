@@ -248,14 +248,33 @@
                         android:layout_marginTop="2dp" />
                 </LinearLayout>
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnQuickAddFriend"
+                <LinearLayout
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:text="Kết bạn"
-                    android:textSize="13sp"
-                    app:cornerRadius="20dp"
-                    app:backgroundTint="@color/colorPrimary" />
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnQuickAddFriend"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:text="Kết bạn"
+                        android:textSize="12sp"
+                        app:cornerRadius="19dp"
+                        app:backgroundTint="@color/colorPrimary" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSimulateFriendRequest"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginTop="4dp"
+                        android:text="Tạo lời mời test"
+                        android:textColor="@color/colorPrimaryLight"
+                        android:textSize="11sp"
+                        app:cornerRadius="17dp"
+                        app:backgroundTint="@color/bg_card"
+                        app:strokeColor="@color/border_subtle"
+                        app:strokeWidth="1dp" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- Pending Friend Requests Section -->
@@ -597,7 +616,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="v1.0.2"
+                            android:text="v1.0.3"
                             android:textColor="@color/text_muted"
                             android:textSize="13sp" />
                     </LinearLayout>
@@ -654,6 +673,21 @@
                     app:cornerRadius="26dp"
                     app:backgroundTint="@color/colorPrimary" />
 
+                <!-- Reset / Clear Test Data Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnClearTestData"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="12dp"
+                    android:text="Xóa toàn bộ bạn bè &amp; tin nhắn để test lại"
+                    android:textColor="@color/call_red"
+                    app:icon="@drawable/ic_delete"
+                    app:iconTint="@color/call_red"
+                    app:cornerRadius="26dp"
+                    app:backgroundTint="@color/bg_card"
+                    app:strokeColor="@color/call_red"
+                    app:strokeWidth="1dp" />
+
                 <!-- Logout Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnLogout"
@@ -661,10 +695,10 @@
                     android:layout_height="52dp"
                     android:layout_marginTop="12dp"
                     android:text="Đăng xuất tài khoản"
-                    android:textColor="@color/call_red"
+                    android:textColor="@color/text_secondary"
                     app:cornerRadius="26dp"
                     app:backgroundTint="@color/bg_card"
-                    app:strokeColor="@color/call_red"
+                    app:strokeColor="@color/border_subtle"
                     app:strokeWidth="1dp" />
             </LinearLayout>
         </ScrollView>

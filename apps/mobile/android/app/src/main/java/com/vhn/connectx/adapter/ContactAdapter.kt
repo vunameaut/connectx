@@ -12,7 +12,8 @@ import com.vhn.connectx.model.User
 class ContactAdapter(
     private val items: List<User>,
     private val onChatClick: (User) -> Unit,
-    private val onCallClick: (User) -> Unit
+    private val onCallClick: (User) -> Unit,
+    private val onDeleteClick: (User) -> Unit
 ) : RecyclerView.Adapter<ContactAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -21,6 +22,7 @@ class ContactAdapter(
         val tvEmail: TextView = view.findViewById(R.id.tvContactEmail)
         val btnQuickChat: ImageView = view.findViewById(R.id.btnQuickChat)
         val btnQuickCall: ImageView = view.findViewById(R.id.btnQuickCall)
+        val btnDeleteContact: ImageView = view.findViewById(R.id.btnDeleteContact)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -30,13 +32,19 @@ class ContactAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = items[position]
-        holder.tvAvatar.text = item.displayName.take(1).uppercase()
+        holder.tvAvatar.text = item.displayName.ifBlank { "U" }.take(1).uppercase()
         holder.tvName.text = item.displayName
         holder.tvEmail.text = item.email
 
         holder.btnQuickChat.setOnClickListener { onChatClick(item) }
         holder.btnQuickCall.setOnClickListener { onCallClick(item) }
+        holder.btnDeleteContact.setOnClickListener { onDeleteClick(item) }
+
         holder.itemView.setOnClickListener { onChatClick(item) }
+        holder.itemView.setOnLongClickListener {
+            onDeleteClick(item)
+            true
+        }
     }
 
     override fun getItemCount(): Int = items.size

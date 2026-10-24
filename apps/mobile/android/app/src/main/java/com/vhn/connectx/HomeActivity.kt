@@ -77,6 +77,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var contactAdapter: ContactAdapter
     private val contacts = mutableListOf<User>()
     private lateinit var btnQuickAddFriend: MaterialButton
+    private lateinit var btnSimulateFriendRequest: MaterialButton
 
     // Tab 3: Calls
     private lateinit var layoutEmptyCalls: View
@@ -96,6 +97,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var btnAboutDevice: LinearLayout
     private lateinit var btnServerConfig: LinearLayout
     private lateinit var tvCurrentServerHost: TextView
+    private lateinit var btnClearTestData: MaterialButton
     private lateinit var btnLogout: MaterialButton
     private lateinit var btnCheckUpdate: MaterialButton
 
@@ -180,13 +182,17 @@ class HomeActivity : AppCompatActivity() {
         contactAdapter = ContactAdapter(
             contacts,
             onChatClick = { contact -> openChatWithUser(contact) },
-            onCallClick = { contact -> startCall(contact.displayName, isVideo = false) }
+            onCallClick = { contact -> startCall(contact.displayName, isVideo = false) },
+            onDeleteClick = { contact -> confirmDeleteContact(contact) }
         )
         rvContacts.adapter = contactAdapter
 
         btnQuickAddFriend = findViewById(R.id.btnQuickAddFriend)
         btnQuickAddFriend.setOnClickListener { showSendFriendRequestDialog() }
         btnAddAction.setOnClickListener { showSendFriendRequestDialog() }
+
+        btnSimulateFriendRequest = findViewById(R.id.btnSimulateFriendRequest)
+        btnSimulateFriendRequest.setOnClickListener { simulateIncomingFriendRequest() }
 
         // Tab 3: Calls
         layoutEmptyCalls = findViewById(R.id.layoutEmptyCalls)
@@ -219,6 +225,7 @@ class HomeActivity : AppCompatActivity() {
         btnAboutDevice = findViewById(R.id.btnAboutDevice)
         btnServerConfig = findViewById(R.id.btnServerConfig)
         tvCurrentServerHost = findViewById(R.id.tvCurrentServerHost)
+        btnClearTestData = findViewById(R.id.btnClearTestData)
         btnLogout = findViewById(R.id.btnLogout)
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
 
@@ -240,6 +247,10 @@ class HomeActivity : AppCompatActivity() {
 
         btnServerConfig.setOnClickListener {
             showServerConfigDialog()
+        }
+
+        btnClearTestData.setOnClickListener {
+            showClearAllTestDataDialog()
         }
 
         btnCheckUpdate.setOnClickListener {
@@ -609,5 +620,56 @@ class HomeActivity : AppCompatActivity() {
             .setMessage(infoMessage)
             .setPositiveButton("Đóng", null)
             .show()
+    }
+
+    private fun confirmDeleteContact(contact: User) {
+        AlertDialog.Builder(this)
+            .setTitle("Xóa bạn bè")
+            .setMessage("Bạn có chắc chắn muốn xóa '${contact.displayName}' khỏi danh bạ không? Toàn bộ cuộc trò chuyện với người này sẽ được xóa để bạn test lại.")
+            .setPositiveButton("Xóa") { _, _ ->
+                appDataStore.removeContact(contact.id)
+                refreshData()
+                Toast.makeText(this, "Đã xóa '${contact.displayName}' khỏi danh bạ!", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun showClearAllTestDataDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Đặt lại toàn bộ dữ liệu Test")
+            .setMessage("Chức năng này sẽ xóa sạch toàn bộ danh bạ bạn bè, các lời mời kết bạn và lịch sử tin nhắn để bạn kiểm tra lại từ đầu trên máy. Bạn có đồng ý không?")
+            .setPositiveButton("Xóa sạch") { _, _ ->
+                appDataStore.clearAllTestData()
+                refreshData()
+                Toast.makeText(this, "Đã xóa sạch dữ liệu! Danh bạ hiện đã trống để bạn test kết bạn mới.", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun simulateIncomingFriendRequest() {
+        val myUser = sessionManager.currentUser
+        val mockReq = FriendRequest(
+            id = "fr_mock_${System.currentTimeMillis()}",
+            senderId = "u_mock_sender",
+            senderName = "Trần Minh Quân",
+            senderEmail = "minhquan.connectx@gmail.com",
+            receiverEmail = myUser.email,
+            timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
+            status = "PENDING"
+        )
+
+        val added = appDataStore.sendFriendRequest(mockReq)
+        if (added) {
+            refreshData()
+            Toast.makeText(
+                this,
+                "Đã tạo lời mời kết bạn mẫu từ 'Trần Minh Quân' gửi đến bạn! Bạn có thể bấm 'Đồng ý' hoặc 'Từ chối' ngay bên dưới để kiểm tra.",
+                Toast.LENGTH_LONG
+            ).show()
+        } else {
+            Toast.makeText(this, "Lời mời kết bạn mẫu đã có sẵn trong danh sách chờ duyệt.", Toast.LENGTH_SHORT).show()
+        }
     }
 }

@@ -62,6 +62,22 @@ class AppDataStore(context: Context) {
         saveContacts(list)
     }
 
+    fun clearAllTestData() {
+        val editor = prefs.edit()
+        editor.remove(KEY_CONTACTS)
+        editor.remove(KEY_FRIEND_REQUESTS)
+        editor.remove(KEY_CONVERSATIONS)
+        editor.remove(KEY_CALL_HISTORY)
+        // Clear all conversation messages
+        val allKeys = prefs.all.keys
+        for (key in allKeys) {
+            if (key.startsWith(KEY_MESSAGES_PREFIX)) {
+                editor.remove(key)
+            }
+        }
+        editor.apply()
+    }
+
     fun saveContacts(list: List<User>) {
         prefs.edit().putString(KEY_CONTACTS, gson.toJson(list)).apply()
     }
