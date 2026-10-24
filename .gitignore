@@ -15,8 +15,15 @@ build/
 *.pem
 *.key
 *.p12
-*.jks
-secrets/
+# Secrets (NEVER COMMIT CREDENTIALS)
+secrets/*.json
+secrets/*.pem
+secrets/*.key
+!secrets/README.md
+**/secrets/*.json
+**/secrets/*.pem
+**/secrets/*.key
+!**/secrets/README.md
 
 # Logs
 logs/
