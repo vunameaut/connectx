@@ -265,6 +265,17 @@ class ChatActivity : AppCompatActivity() {
             outputStream.close()
             inputStream.close()
 
+            // Create a lightweight compressed version for direct cloud delivery
+            val scaledBitmap = if (bitmap.width > 800 || bitmap.height > 800) {
+                val ratio = Math.min(800f / bitmap.width, 800f / bitmap.height)
+                Bitmap.createScaledBitmap(bitmap, (bitmap.width * ratio).toInt(), (bitmap.height * ratio).toInt(), true)
+            } else {
+                bitmap
+            }
+            val byteOut = java.io.ByteArrayOutputStream()
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, byteOut)
+            val base64Image = "data:image/jpeg;base64," + android.util.Base64.encodeToString(byteOut.toByteArray(), android.util.Base64.NO_WRAP)
+
             val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
             val imageMsg = Message(
                 id = "media_${System.currentTimeMillis()}",
@@ -274,7 +285,7 @@ class ChatActivity : AppCompatActivity() {
                 text = "📷 [Hình ảnh]",
                 timestamp = currentTime,
                 isMe = true,
-                mediaUrl = localFile.absolutePath,
+                mediaUrl = base64Image,
                 messageType = "image"
             )
 
@@ -284,11 +295,8 @@ class ChatActivity : AppCompatActivity() {
             rvMessages.smoothScrollToPosition(messages.size - 1)
             Toast.makeText(this, "Đã gửi hình ảnh!", Toast.LENGTH_SHORT).show()
 
-            // Upload to Cloud Firestore for real-time delivery
+            // Upload to Cloud Firestore for real-time delivery across phones
             com.vhn.connectx.net.FirebaseSyncManager.sendMessage(convId, imageMsg) {}
-
-            // Synchronize with server fallback
-            ApiClient.sendMessageToServer(this, convId, imageMsg) { success -> }
 
             // Attempt Cloudinary upload in background if online
             val token = sessionManager.supabaseToken ?: "token"

@@ -124,7 +124,11 @@ class MessageAdapter(
         imageExecutor.execute {
             var bitmap: Bitmap? = null
             try {
-                if (path.startsWith("content://")) {
+                if (path.startsWith("data:image")) {
+                    val base64Data = path.substringAfter("base64,")
+                    val decodedBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                    bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+                } else if (path.startsWith("content://")) {
                     val uri = Uri.parse(path)
                     imageView.context.contentResolver.openInputStream(uri)?.use { stream ->
                         bitmap = BitmapFactory.decodeStream(stream)

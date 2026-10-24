@@ -43,16 +43,18 @@ object FirebaseSyncManager {
     }
 
     /**
-     * Listen in REAL-TIME for incoming friend requests for the given email.
+     * Listen in REAL-TIME for incoming friend requests AND accepted friend requests.
      */
-    fun listenIncomingFriendRequests(
+    fun listenFriendRequests(
         myEmail: String,
-        onUpdate: (List<FriendRequest>) -> Unit
-    ): ListenerRegistration? {
+        onIncomingUpdate: (List<FriendRequest>) -> Unit,
+        onAcceptedUpdate: (List<FriendRequest>) -> Unit
+    ): Pair<ListenerRegistration?, ListenerRegistration?> {
         val cleanEmail = myEmail.trim().lowercase()
-        if (cleanEmail.isBlank()) return null
+        if (cleanEmail.isBlank()) return Pair(null, null)
 
-        return try {
+        // 1. Incoming pending requests (where I am receiver)
+        val incomingListener = try {
             firestore.collection("friend_requests")
                 .whereEqualTo("receiverEmail", cleanEmail)
                 .addSnapshotListener { snapshot, error ->
@@ -86,22 +88,77 @@ object FirebaseSyncManager {
                                 )
                             }
                         }
-                        onUpdate(list)
+                        onIncomingUpdate(list)
                     }
                 }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to register friend requests snapshot listener", e)
+            Log.e(TAG, "Failed to register incoming friend requests listener", e)
             null
         }
+
+        // 2. Outgoing requests that were ACCEPTED by the recipient (where I was sender)
+        val acceptedListener = try {
+            firestore.collection("friend_requests")
+                .whereEqualTo("senderEmail", cleanEmail)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w(TAG, "Accepted requests listen failed: ${error.message}")
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null) {
+                        val list = mutableListOf<FriendRequest>()
+                        for (doc in snapshot.documents) {
+                            val id = doc.getString("id") ?: doc.id
+                            val senderId = doc.getString("senderId") ?: ""
+                            val senderName = doc.getString("senderName") ?: ""
+                            val senderEmail = doc.getString("senderEmail") ?: ""
+                            val receiverEmail = doc.getString("receiverEmail") ?: ""
+                            val receiverName = doc.getString("receiverName") ?: receiverEmail.substringBefore("@")
+                            val timestamp = doc.getString("timestamp") ?: ""
+                            val status = doc.getString("status") ?: "PENDING"
+
+                            if (status == "ACCEPTED") {
+                                list.add(
+                                    FriendRequest(
+                                        id = id,
+                                        senderId = senderId,
+                                        senderName = receiverName, // Use receiver's name for sender's contact list
+                                        senderEmail = senderEmail,
+                                        receiverEmail = receiverEmail,
+                                        timestamp = timestamp,
+                                        status = status
+                                    )
+                                )
+                            }
+                        }
+                        onAcceptedUpdate(list)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register accepted requests listener", e)
+            null
+        }
+
+        return Pair(incomingListener, acceptedListener)
     }
 
     /**
      * Respond to Friend Request (ACCEPTED or REJECTED) on Cloud Firestore.
      */
-    fun respondFriendRequest(reqId: String, status: String, onComplete: (Boolean) -> Unit) {
+    fun respondFriendRequest(
+        reqId: String,
+        status: String,
+        myDisplayName: String,
+        onComplete: (Boolean) -> Unit
+    ) {
+        val updates = hashMapOf<String, Any>(
+            "status" to status,
+            "receiverName" to myDisplayName
+        )
         firestore.collection("friend_requests")
             .document(reqId)
-            .update("status", status)
+            .update(updates)
             .addOnSuccessListener {
                 Log.i(TAG, "Friend request $reqId marked as $status on Firestore")
                 onComplete(true)
@@ -128,6 +185,19 @@ object FirebaseSyncManager {
             "serverTime" to System.currentTimeMillis()
         )
 
+        // 1. Update Conversation document summary
+        val convSummary = hashMapOf(
+            "id" to convId,
+            "lastMessage" to if (message.messageType == "image") "📷 [Hình ảnh]" else message.text,
+            "lastMessageSender" to message.senderName,
+            "lastTimestamp" to message.timestamp,
+            "lastServerTime" to System.currentTimeMillis()
+        )
+        firestore.collection("conversations")
+            .document(convId)
+            .set(convSummary, com.google.firebase.firestore.SetOptions.merge())
+
+        // 2. Add message to subcollection
         firestore.collection("conversations")
             .document(convId)
             .collection("messages")
@@ -193,6 +263,30 @@ object FirebaseSyncManager {
                 }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register messages listener", e)
+            null
+        }
+    }
+
+    /**
+     * Listen in REAL-TIME for conversation summary update (to show in HomeActivity chats tab).
+     */
+    fun listenConversationSummary(
+        convId: String,
+        onUpdate: (lastMsg: String, lastTime: String, senderName: String) -> Unit
+    ): ListenerRegistration? {
+        return try {
+            firestore.collection("conversations")
+                .document(convId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                    val lastMsg = snapshot.getString("lastMessage") ?: ""
+                    val lastTime = snapshot.getString("lastTimestamp") ?: ""
+                    val senderName = snapshot.getString("lastMessageSender") ?: ""
+                    if (lastMsg.isNotBlank()) {
+                        onUpdate(lastMsg, lastTime, senderName)
+                    }
+                }
+        } catch (e: Exception) {
             null
         }
     }

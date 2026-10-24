@@ -122,7 +122,8 @@ class HomeActivity : AppCompatActivity() {
         UpdateManager.checkForUpdate(this, isManual = false)
     }
 
-    private var friendRequestListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var friendRequestListeners: Pair<com.google.firebase.firestore.ListenerRegistration?, com.google.firebase.firestore.ListenerRegistration?>? = null
+    private val conversationListeners = mutableListOf<com.google.firebase.firestore.ListenerRegistration>()
 
     override fun onResume() {
         super.onResume()
@@ -133,25 +134,61 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        friendRequestListener?.remove()
-        friendRequestListener = null
+        friendRequestListeners?.first?.remove()
+        friendRequestListeners?.second?.remove()
+        friendRequestListeners = null
+        conversationListeners.forEach { it.remove() }
+        conversationListeners.clear()
     }
 
     private fun startListeningRealtimeFriendRequests() {
         val myEmail = sessionManager.currentUser.email
         if (myEmail.isBlank()) return
-        friendRequestListener?.remove()
-        friendRequestListener = com.vhn.connectx.net.FirebaseSyncManager.listenIncomingFriendRequests(myEmail) { incoming ->
-            var hasChange = false
-            for (req in incoming) {
-                if (appDataStore.sendFriendRequest(req)) {
-                    hasChange = true
+
+        friendRequestListeners?.first?.remove()
+        friendRequestListeners?.second?.remove()
+        friendRequestListeners = com.vhn.connectx.net.FirebaseSyncManager.listenFriendRequests(
+            myEmail = myEmail,
+            onIncomingUpdate = { incoming ->
+                var hasChange = false
+                for (req in incoming) {
+                    if (appDataStore.sendFriendRequest(req)) {
+                        hasChange = true
+                    }
+                }
+                if (hasChange || incoming.size != pendingRequests.size) {
+                    refreshData()
+                }
+            },
+            onAcceptedUpdate = { acceptedList ->
+                // The recipient accepted my friend request! Add them to contacts immediately!
+                var addedAny = false
+                for (req in acceptedList) {
+                    val partnerEmail = req.receiverEmail
+                    val partnerName = req.senderName.ifBlank { partnerEmail.substringBefore("@") }
+                    val partnerUser = com.vhn.connectx.model.User(
+                        id = "u_${partnerEmail.hashCode()}",
+                        displayName = partnerName,
+                        email = partnerEmail,
+                        isOnline = true
+                    )
+                    if (appDataStore.addContact(partnerUser)) {
+                        val convId = appDataStore.getDirectConvId(myEmail, partnerEmail)
+                        appDataStore.updateConversation(
+                            convId = convId,
+                            title = partnerName,
+                            lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
+                            timestamp = "Vừa xong"
+                        )
+                        addedAny = true
+                    }
+                }
+                if (addedAny) {
+                    Toast.makeText(this, "Đối phương đã chấp nhận lời mời kết bạn!", Toast.LENGTH_SHORT).show()
+                    refreshData()
                 }
             }
-            if (hasChange || incoming.size != pendingRequests.size) {
-                refreshData()
-            }
-        }
+        )
     }
 
     private fun initViews() {
@@ -179,7 +216,10 @@ class HomeActivity : AppCompatActivity() {
         rvConversations = findViewById(R.id.rvConversations)
         rvConversations.layoutManager = LinearLayoutManager(this)
         conversationAdapter = ConversationAdapter(conversations) { conv ->
-            openChat(conv.id, conv.title, "")
+            // Find contact email for this conversation
+            val matchedContact = contacts.find { it.displayName.equals(conv.title, ignoreCase = true) }
+            val contactEmail = matchedContact?.email ?: ""
+            openChat(conv.id, conv.title, contactEmail)
         }
         rvConversations.adapter = conversationAdapter
 
@@ -372,6 +412,26 @@ class HomeActivity : AppCompatActivity() {
             layoutEmptyChats.visibility = View.GONE
             tvRecentChatsHeader.visibility = View.VISIBLE
             rvConversations.visibility = View.VISIBLE
+
+            // Real-time listen to summary of each conversation
+            conversationListeners.forEach { it.remove() }
+            conversationListeners.clear()
+            for (conv in conversations) {
+                val listener = com.vhn.connectx.net.FirebaseSyncManager.listenConversationSummary(conv.id) { lastMsg, lastTime, senderName ->
+                    val index = conversations.indexOfFirst { it.id == conv.id }
+                    if (index >= 0) {
+                        val current = conversations[index]
+                        if (current.lastMessage != lastMsg || current.timestamp != lastTime) {
+                            appDataStore.updateConversation(conv.id, current.title, lastMsg, lastTime)
+                            conversations[index] = current.copy(lastMessage = lastMsg, timestamp = lastTime)
+                            conversationAdapter.notifyItemChanged(index)
+                        }
+                    }
+                }
+                if (listener != null) {
+                    conversationListeners.add(listener)
+                }
+            }
         }
 
         // 4. Call history
@@ -469,7 +529,7 @@ class HomeActivity : AppCompatActivity() {
         val myUser = sessionManager.currentUser
         val newFriend = appDataStore.acceptFriendRequest(req.id, myUser)
         if (newFriend != null) {
-            com.vhn.connectx.net.FirebaseSyncManager.respondFriendRequest(req.id, "ACCEPTED") {}
+            com.vhn.connectx.net.FirebaseSyncManager.respondFriendRequest(req.id, "ACCEPTED", myUser.displayName) {}
             ApiClient.respondFriendRequest(this, req.id, "ACCEPTED") {}
             Toast.makeText(this, "Đã trở thành bạn bè với ${newFriend.displayName}!", Toast.LENGTH_SHORT).show()
             refreshData()
@@ -479,8 +539,9 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun handleRejectFriendRequest(req: FriendRequest) {
+        val myUser = sessionManager.currentUser
         appDataStore.rejectFriendRequest(req.id)
-        com.vhn.connectx.net.FirebaseSyncManager.respondFriendRequest(req.id, "REJECTED") {}
+        com.vhn.connectx.net.FirebaseSyncManager.respondFriendRequest(req.id, "REJECTED", myUser.displayName) {}
         ApiClient.respondFriendRequest(this, req.id, "REJECTED") {}
         Toast.makeText(this, "Đã từ chối lời mời kết bạn", Toast.LENGTH_SHORT).show()
         refreshData()
