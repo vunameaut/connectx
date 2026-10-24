@@ -39,13 +39,13 @@ export async function buildServer(): Promise<FastifyInstance> {
   // App Version & In-App Auto-Update Endpoint (Mandatory Force Update)
   server.get('/api/v1/app/version', async () => {
     return {
-      versionCode: 2,
-      versionName: '1.0.1',
-      minSupportedVersion: '1.0.1',
+      versionCode: 3,
+      versionName: '1.0.2',
+      minSupportedVersion: '1.0.2',
       updateRequired: true,
       forceUpdate: true,
-      releaseNotes: 'Bản cập nhật bắt buộc v1.0.1: Chuyển sang dữ liệu thực tế, tối ưu WebRTC và hỗ trợ giao diện Sáng/Tối.',
-      downloadUrl: 'https://github.com/vunameaut/connectx/releases/download/v1.0.1/ConnectX-v1.0.1.apk',
+      releaseNotes: 'Bản cập nhật bắt buộc v1.0.2: Hoàn thiện luồng kết bạn 2 chiều (gửi lời mời & đồng ý), đồng bộ tin nhắn hai chiều thời gian thực, gửi ảnh thật từ thư viện máy, đầy đủ icon đa phương tiện và chọn người trước khi gọi.',
+      downloadUrl: 'https://github.com/vunameaut/connectx/releases/download/v1.0.2/ConnectX-v1.0.2.apk',
       publishedAt: new Date().toISOString(),
     };
   });
