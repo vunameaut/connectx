@@ -16,6 +16,8 @@ const envSchema = z.object({
   CLOUDINARY_API_SECRET: z.string().default('placeholder-cloudinary-secret'),
   TURN_SECRET: z.string().default('development-turn-secret'),
   TURN_SERVERS: z.string().default('turn:turn.connectx.app:3478'),
+  TURN_USERNAME: z.string().optional(),
+  TURN_CREDENTIAL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

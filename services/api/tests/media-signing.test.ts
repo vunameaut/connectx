@@ -70,7 +70,6 @@ describe('Media Signing & TURN Credentials Tests', () => {
       url: '/api/v1/calls/ice-servers',
       headers: { authorization: `Bearer ${validToken}` },
     });
-
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.payload);
     expect(body.iceServers).toBeInstanceOf(Array);
