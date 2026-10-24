@@ -125,13 +125,15 @@ object ApiClient {
      * Signs Cloudinary upload payload via backend API.
      */
     fun signCloudinaryUpload(
+        context: Context,
         conversationId: String,
         mimeType: String,
         sizeBytes: Long,
         supabaseToken: String,
         onComplete: (SignedTicket?) -> Unit
     ) {
-        val url = "$apiBaseUrl/api/v1/media/sign-upload"
+        val baseUrl = getBaseUrl(context)
+        val url = "$baseUrl/api/v1/media/sign-upload"
         val payload = gson.toJson(
             SignUploadRequest(
                 conversationId = conversationId,

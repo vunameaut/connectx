@@ -300,7 +300,7 @@ class ChatActivity : AppCompatActivity() {
 
             // Attempt Cloudinary upload in background if online
             val token = sessionManager.supabaseToken ?: "token"
-            ApiClient.signCloudinaryUpload(convId, "image/jpeg", localFile.length(), token) { ticket ->
+            ApiClient.signCloudinaryUpload(this, convId, "image/jpeg", localFile.length(), token) { ticket ->
                 if (ticket != null) {
                     val bytes = localFile.readBytes()
                     ApiClient.uploadToCloudinary(ticket, bytes, localFile.name) { cdnUrl ->
