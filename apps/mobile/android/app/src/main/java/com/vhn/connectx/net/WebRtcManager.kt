@@ -73,12 +73,51 @@ class WebRtcManager(
         PeerConnectionFactory.initialize(options)
 
         // enableH264HighProfile = false to prevent MediaCodec crashes on Exynos/MediaTek chipsets
-        val encoderFactory = DefaultVideoEncoderFactory(eglContext, true, false)
-        val decoderFactory = DefaultVideoDecoderFactory(eglContext)
+        val defaultEncoderFactory = DefaultVideoEncoderFactory(eglContext, true, false)
+        val defaultDecoderFactory = DefaultVideoDecoderFactory(eglContext)
+
+        val safeDecoderFactory = object : VideoDecoderFactory {
+            override fun createDecoder(info: VideoCodecInfo?): VideoDecoder? {
+                return try {
+                    defaultDecoderFactory.createDecoder(info)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "SafeDecoderFactory error creating decoder for ${info?.name}: ${t.message}", t)
+                    null
+                }
+            }
+
+            override fun getSupportedCodecs(): Array<VideoCodecInfo> {
+                return try {
+                    defaultDecoderFactory.supportedCodecs
+                } catch (t: Throwable) {
+                    Log.e(TAG, "SafeDecoderFactory error getting supported codecs: ${t.message}", t)
+                    emptyArray()
+                }
+            }
+        }
+
+        val safeEncoderFactory = object : VideoEncoderFactory {
+            override fun createEncoder(info: VideoCodecInfo?): VideoEncoder? {
+                return try {
+                    defaultEncoderFactory.createEncoder(info)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "SafeEncoderFactory error creating encoder for ${info?.name}: ${t.message}", t)
+                    null
+                }
+            }
+
+            override fun getSupportedCodecs(): Array<VideoCodecInfo> {
+                return try {
+                    defaultEncoderFactory.supportedCodecs
+                } catch (t: Throwable) {
+                    emptyArray()
+                }
+            }
+        }
 
         peerConnectionFactory = PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(encoderFactory)
-            .setVideoDecoderFactory(decoderFactory)
+            .setVideoEncoderFactory(safeEncoderFactory)
+            .setVideoDecoderFactory(safeDecoderFactory)
             .setOptions(PeerConnectionFactory.Options())
             .createPeerConnectionFactory()
     }
@@ -250,8 +289,15 @@ class WebRtcManager(
             override fun onTrack(transceiver: RtpTransceiver?) {
                 val track = transceiver?.receiver?.track()
                 if (track is VideoTrack) {
-                    remoteVideoTrack = track
-                    remoteVideoTrack?.addSink(remoteRenderer)
+                    if (remoteVideoTrack != track) {
+                        try { remoteVideoTrack?.removeSink(remoteRenderer) } catch (_: Exception) {}
+                        remoteVideoTrack = track
+                        try {
+                            remoteVideoTrack?.addSink(remoteRenderer)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error adding sink to remote video track: ${e.message}")
+                        }
+                    }
                     onRemoteVideoTrackReady?.invoke(track)
                 } else if (track is AudioTrack) {
                     remoteAudioTrack = track
@@ -264,7 +310,11 @@ class WebRtcManager(
                     if (stream.videoTracks.isNotEmpty() && remoteVideoTrack == null) {
                         val track = stream.videoTracks[0]
                         remoteVideoTrack = track
-                        remoteVideoTrack?.addSink(remoteRenderer)
+                        try {
+                            remoteVideoTrack?.addSink(remoteRenderer)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error adding sink in onAddStream: ${e.message}")
+                        }
                         onRemoteVideoTrackReady?.invoke(track)
                     }
                     if (stream.audioTracks.isNotEmpty() && remoteAudioTrack == null) {

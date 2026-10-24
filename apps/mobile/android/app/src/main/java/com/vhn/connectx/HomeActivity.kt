@@ -245,7 +245,11 @@ class HomeActivity : AppCompatActivity() {
                 }
             }
         ) { callId, callerName, callerEmail, isVideo ->
-            if (callId == lastHandledCallId && CallActivity.isCallActive) return@listenIncomingCall
+            if (CallActivity.isCallActive) {
+                android.util.Log.i("HomeActivity", "Ignoring incoming call event because CallActivity is already active")
+                return@listenIncomingCall
+            }
+            if (callId == lastHandledCallId) return@listenIncomingCall
             lastHandledCallId = callId
             showIncomingCall(callId, callerName, callerEmail, isVideo)
         }

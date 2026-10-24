@@ -337,12 +337,11 @@ class CallActivity : AppCompatActivity() {
         // 1. Timeout "không đổ chuông thì tắt": Chờ tối đa 15s nếu người nhận không có mạng / không đổ chuông
         connectingTimeoutHandler.removeCallbacksAndMessages(null)
         connectingTimeoutHandler.postDelayed({
-            if (!isRingingReceived && !isCallAccepted && !isFinishing && !isDestroyed) {
-                tvCallStatus.text = "Thuê bao hiện không thể liên lạc"
-                FirebaseSyncManager.updateCallStatus(callId, "UNREACHABLE")
-                Toast.makeText(this, "Thuê bao hiện không có phản hồi tín hiệu (Không đổ chuông)", Toast.LENGTH_SHORT).show()
-                Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
-            }
+            if (isCallAccepted || isRingingReceived || isFinishing || isDestroyed) return@postDelayed
+            tvCallStatus.text = "Thuê bao hiện không thể liên lạc"
+            FirebaseSyncManager.updateCallStatus(callId, "UNREACHABLE")
+            Toast.makeText(this, "Thuê bao hiện không có phản hồi tín hiệu (Không đổ chuông)", Toast.LENGTH_SHORT).show()
+            Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
         }, CONNECTING_TIMEOUT_MS)
 
         // Listen for recipient response
@@ -352,12 +351,11 @@ class CallActivity : AppCompatActivity() {
     private fun startRingingTimeout() {
         ringingTimeoutHandler.removeCallbacksAndMessages(null)
         ringingTimeoutHandler.postDelayed({
-            if (!isCallAccepted && !isFinishing && !isDestroyed) {
-                tvCallStatus.text = "Người nhận không trả lời"
-                FirebaseSyncManager.updateCallStatus(callId, "MISSED")
-                Toast.makeText(this, "Không có phản hồi từ đối phương (Hết thời gian chờ)", Toast.LENGTH_SHORT).show()
-                Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
-            }
+            if (isCallAccepted || isFinishing || isDestroyed) return@postDelayed
+            tvCallStatus.text = "Người nhận không trả lời"
+            FirebaseSyncManager.updateCallStatus(callId, "MISSED")
+            Toast.makeText(this, "Không có phản hồi từ đối phương (Hết thời gian chờ)", Toast.LENGTH_SHORT).show()
+            Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
         }, RINGING_TIMEOUT_MS)
     }
 
@@ -382,14 +380,13 @@ class CallActivity : AppCompatActivity() {
         // 2. Timeout "đổ chuông bao lâu không nghe thì tắt": 30s đổ chuông không nghe thì tự tắt
         ringingTimeoutHandler.removeCallbacksAndMessages(null)
         ringingTimeoutHandler.postDelayed({
-            if (!isCallAccepted && !isFinishing && !isDestroyed) {
-                ringtone?.stop()
-                dismissNotification()
-                tvCallStatus.text = "Cuộc gọi nhỡ"
-                FirebaseSyncManager.updateCallStatus(callId, "MISSED")
-                Toast.makeText(this, "Cuộc gọi nhỡ từ $contactName", Toast.LENGTH_SHORT).show()
-                Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
-            }
+            if (isCallAccepted || isFinishing || isDestroyed) return@postDelayed
+            ringtone?.stop()
+            dismissNotification()
+            tvCallStatus.text = "Cuộc gọi nhỡ"
+            FirebaseSyncManager.updateCallStatus(callId, "MISSED")
+            Toast.makeText(this, "Cuộc gọi nhỡ từ $contactName", Toast.LENGTH_SHORT).show()
+            Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
         }, RINGING_TIMEOUT_MS)
 
         btnAcceptCall.setOnClickListener {
@@ -422,6 +419,12 @@ class CallActivity : AppCompatActivity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
 
+                // Nếu cuộc gọi đã kết nối thành công, tuyệt đối KHÔNG chấp nhận các trạng thái trễ gây ngắt cuộc gọi
+                if (isCallAccepted && (status == "MISSED" || status == "UNREACHABLE" || status == "RINGING" || status == "DECLINED")) {
+                    Log.w("CallActivity", "Ignoring late status update '$status' because call is already active")
+                    return@runOnUiThread
+                }
+
                 // Khi đối phương bắt đầu đổ chuông thực tế
                 if (isRinging && !isRingingReceived && !isCallAccepted && !isIncoming) {
                     isRingingReceived = true
@@ -433,9 +436,9 @@ class CallActivity : AppCompatActivity() {
 
                 when (status) {
                     "ACCEPTED" -> {
+                        connectingTimeoutHandler.removeCallbacksAndMessages(null)
+                        ringingTimeoutHandler.removeCallbacksAndMessages(null)
                         if (!isCallAccepted) {
-                            connectingTimeoutHandler.removeCallbacksAndMessages(null)
-                            ringingTimeoutHandler.removeCallbacksAndMessages(null)
                             onCallConnected()
                         }
                     }
