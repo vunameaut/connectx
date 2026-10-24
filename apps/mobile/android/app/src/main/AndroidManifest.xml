@@ -52,6 +52,7 @@
         <activity
             android:name=".CallActivity"
             android:exported="false"
+            android:launchMode="singleTask"
             android:screenOrientation="portrait" />
 
         <!-- Legacy / Diagnostic Test Center -->

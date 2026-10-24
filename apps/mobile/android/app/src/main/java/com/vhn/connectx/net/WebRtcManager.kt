@@ -66,7 +66,8 @@ class WebRtcManager(
             .createInitializationOptions()
         PeerConnectionFactory.initialize(options)
 
-        val encoderFactory = DefaultVideoEncoderFactory(eglContext, true, true)
+        // enableH264HighProfile = false to prevent MediaCodec crashes on Exynos/MediaTek chipsets
+        val encoderFactory = DefaultVideoEncoderFactory(eglContext, true, false)
         val decoderFactory = DefaultVideoDecoderFactory(eglContext)
 
         peerConnectionFactory = PeerConnectionFactory.builder()
@@ -111,14 +112,27 @@ class WebRtcManager(
 
         cameraCapturer = createCameraCapturer(isFront)
         if (cameraCapturer != null) {
-            surfaceTextureHelper = SurfaceTextureHelper.create("CameraTextureHelper", eglContext)
-            localVideoSource = peerConnectionFactory?.createVideoSource(cameraCapturer!!.isScreencast)
-            cameraCapturer?.initialize(surfaceTextureHelper, context, localVideoSource?.capturerObserver)
-            cameraCapturer?.startCapture(640, 480, 30)
+            try {
+                surfaceTextureHelper = SurfaceTextureHelper.create("CameraTextureHelper", eglContext)
+                localVideoSource = peerConnectionFactory?.createVideoSource(cameraCapturer!!.isScreencast)
+                cameraCapturer?.initialize(surfaceTextureHelper, context, localVideoSource?.capturerObserver)
+                try {
+                    cameraCapturer?.startCapture(640, 480, 24)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Fallback to 480x360@20fps capture: ${e.message}")
+                    try {
+                        cameraCapturer?.startCapture(480, 360, 20)
+                    } catch (e2: Exception) {
+                        Log.e(TAG, "startCapture failed: ${e2.message}")
+                    }
+                }
 
-            localVideoTrack = peerConnectionFactory?.createVideoTrack(VIDEO_TRACK_ID, localVideoSource)
-            localVideoTrack?.setEnabled(true)
-            localVideoTrack?.addSink(localRenderer)
+                localVideoTrack = peerConnectionFactory?.createVideoTrack(VIDEO_TRACK_ID, localVideoSource)
+                localVideoTrack?.setEnabled(true)
+                localVideoTrack?.addSink(localRenderer)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error initializing local camera track: ${e.message}", e)
+            }
         }
     }
 

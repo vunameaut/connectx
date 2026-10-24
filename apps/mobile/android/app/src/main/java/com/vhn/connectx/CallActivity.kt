@@ -35,6 +35,10 @@ import java.util.Locale
 
 class CallActivity : AppCompatActivity() {
 
+    companion object {
+        var isCallActive = false
+    }
+
     private lateinit var tvCallAvatar: TextView
     private lateinit var tvCallContactName: TextView
     private lateinit var tvCallStatus: TextView
@@ -151,6 +155,7 @@ class CallActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        isCallActive = true
 
         // Wake screen and show over lockscreen like Zalo / WhatsApp
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -237,6 +242,17 @@ class CallActivity : AppCompatActivity() {
         localVideoView = findViewById(R.id.localVideoView)
         cardLocalVideo = findViewById(R.id.cardLocalVideo)
         callHeaderLayout = findViewById(R.id.callHeaderLayout)
+
+        // Essential: Set Z-Order Media Overlay for overlapping local preview
+        try {
+            localVideoView.setZOrderMediaOverlay(true)
+            localVideoView.setEnableHardwareScaler(true)
+            localVideoView.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FIT)
+            remoteVideoView.setEnableHardwareScaler(true)
+            remoteVideoView.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+        } catch (e: Exception) {
+            Log.w("CallActivity", "Error setting video surface attributes: ${e.message}")
+        }
 
         tvCallContactName.text = contactName
         tvCallAvatar.text = contactName.ifBlank { "U" }.take(1).uppercase()
@@ -343,37 +359,42 @@ class CallActivity : AppCompatActivity() {
     private fun setupWebRtcMedia() {
         if (webRtcManager != null) return
 
-        webRtcManager = com.vhn.connectx.net.WebRtcManager(
-            context = applicationContext,
-            callId = callId,
-            isCaller = !isIncoming
-        ).apply {
-            onRemoteVideoTrackReady = {
-                runOnUiThread {
-                    remoteVideoView.visibility = View.VISIBLE
-                    callHeaderLayout.visibility = View.GONE
-                    tvCallStatus.text = "Đang truyền hình ảnh HD"
+        try {
+            webRtcManager = com.vhn.connectx.net.WebRtcManager(
+                context = applicationContext,
+                callId = callId,
+                isCaller = !isIncoming
+            ).apply {
+                onRemoteVideoTrackReady = {
+                    runOnUiThread {
+                        remoteVideoView.visibility = View.VISIBLE
+                        callHeaderLayout.visibility = View.GONE
+                        tvCallStatus.text = "Đang truyền hình ảnh HD"
+                    }
+                }
+                onCallDisconnected = {
+                    runOnUiThread {
+                        tvCallStatus.text = "Tín hiệu mạng không ổn định..."
+                    }
                 }
             }
-            onCallDisconnected = {
-                runOnUiThread {
-                    tvCallStatus.text = "Tín hiệu mạng không ổn định..."
+
+            // If Video Call is enabled, start local camera preview
+            if (isVideoEnabled) {
+                try {
+                    webRtcManager?.startCamera(localVideoView, isFront = true)
+                    cardLocalVideo.visibility = View.VISIBLE
+                } catch (e: Exception) {
+                    Log.e("CallActivity", "Error starting camera: ${e.message}")
                 }
             }
-        }
 
-        // If Video Call is enabled, start local camera preview
-        if (isVideoEnabled) {
-            try {
-                webRtcManager?.startCamera(localVideoView, isFront = true)
-                cardLocalVideo.visibility = View.VISIBLE
-            } catch (e: Exception) {
-                Log.e("CallActivity", "Error starting camera: ${e.message}")
-            }
+            // Start PeerConnection & Audio/Video streaming
+            webRtcManager?.startPeerConnection(remoteVideoView)
+        } catch (e: Exception) {
+            Log.e("CallActivity", "Fatal error in setupWebRtcMedia: ${e.message}", e)
+            Toast.makeText(this, "Lỗi khởi tạo truyền thông WebRTC: ${e.message}", Toast.LENGTH_LONG).show()
         }
-
-        // Start PeerConnection & Audio/Video streaming
-        webRtcManager?.startPeerConnection(remoteVideoView)
     }
 
     private fun setupCallControls() {
@@ -471,6 +492,7 @@ class CallActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isCallActive = false
         ringtone?.stop()
         callStatusListener?.remove()
         timerHandler.removeCallbacks(timerRunnable)
@@ -478,6 +500,12 @@ class CallActivity : AppCompatActivity() {
             unregisterReceiver(captureReceiver)
         } catch (e: Exception) {
             // Already unregistered
+        }
+        try {
+            localVideoView.release()
+            remoteVideoView.release()
+        } catch (e: Exception) {
+            Log.w("CallActivity", "Error releasing SurfaceViewRenderers: ${e.message}")
         }
         webRtcManager?.cleanup()
         webRtcManager = null

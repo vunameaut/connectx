@@ -148,13 +148,18 @@ class HomeActivity : AppCompatActivity() {
         // Xin quyền tự động 1 chạm khi mở app
         checkStartupPermissions()
 
-        // Clear any previous crash logs
+        // Check and report any previous crash logs
         try {
             val crashPrefs = getSharedPreferences("connectx_crash", MODE_PRIVATE)
             val lastCrash = crashPrefs.getString("last_crash", null)
             if (!lastCrash.isNullOrBlank()) {
                 android.util.Log.e("ConnectX_Crash", "Previous crash detected:\n$lastCrash")
                 crashPrefs.edit().clear().apply()
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("Chi tiết sự cố vừa xảy ra")
+                    .setMessage(lastCrash.take(600))
+                    .setPositiveButton("Đã hiểu", null)
+                    .show()
             }
         } catch (e: Exception) {
             // Ignore
@@ -239,6 +244,10 @@ class HomeActivity : AppCompatActivity() {
         callerEmail: String,
         isVideo: Boolean
     ) {
+        if (CallActivity.isCallActive) {
+            android.util.Log.w("HomeActivity", "CallActivity is already active, ignoring duplicate incoming call $callId")
+            return
+        }
         val callIntent = Intent(this, CallActivity::class.java).apply {
             putExtra("EXTRA_CALL_ID", callId)
             putExtra("EXTRA_CONTACT_NAME", callerName)
