@@ -7,6 +7,7 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+*.apk
 
 # Environment & Secrets (NEVER COMMIT)
 .env

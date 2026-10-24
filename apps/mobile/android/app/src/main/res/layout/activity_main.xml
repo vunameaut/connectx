@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center_horizontal"
+    android:background="#0F172A">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="ConnectX"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:layout_marginTop="20dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Real-time Calls &amp; Screen Sharing"
+        android:textSize="14sp"
+        android:textColor="#94A3B8"
+        android:layout_marginBottom="30dp" />
+
+    <!-- Status Card -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#1E293B"
+        android:padding="16dp"
+        android:layout_marginBottom="24dp">
+
+        <TextView
+            android:id="@+id/tvScreenShareStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Screen Sharing: IDLE"
+            android:textColor="#22C55E"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tvTurnStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="TURN: global.relay.metered.ca"
+            android:textColor="#94A3B8"
+            android:textSize="13sp"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tvFirebaseStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Firebase: message-62553 (Ready)"
+            android:textColor="#94A3B8"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- Screen Sharing Controls -->
+    <Button
+        android:id="@+id/btnStartScreenShare"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Start Screen Sharing"
+        android:textAllCaps="false"
+        android:textSize="16sp"
+        android:backgroundTint="#2563EB"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnStopScreenShare"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Stop Screen Sharing"
+        android:textAllCaps="false"
+        android:textSize="16sp"
+        android:backgroundTint="#DC2626"
+        android:textColor="#FFFFFF"
+        android:enabled="false"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="* Notice: In compliance with Android security policies, DRM protected content and apps with FLAG_SECURE (banking, passwords) will be rendered as black frames."
+        android:textSize="12sp"
+        android:textColor="#64748B"
+        android:layout_marginTop="16dp" />
+
+</LinearLayout>
