@@ -53,7 +53,9 @@ object FirebaseSyncManager {
         val cleanEmail = myEmail.trim().lowercase()
         if (cleanEmail.isBlank()) return Pair(null, null)
 
-        // 1. Incoming pending requests (where I am receiver)
+        // 1. Where I am receiver:
+        // - status == PENDING -> Incoming request to be accepted/declined
+        // - status == ACCEPTED -> Previously accepted friendship, partner is the sender
         val incomingListener = try {
             firestore.collection("friend_requests")
                 .whereEqualTo("receiverEmail", cleanEmail)
@@ -64,7 +66,8 @@ object FirebaseSyncManager {
                     }
 
                     if (snapshot != null) {
-                        val list = mutableListOf<FriendRequest>()
+                        val pendingList = mutableListOf<FriendRequest>()
+                        val acceptedList = mutableListOf<FriendRequest>()
                         for (doc in snapshot.documents) {
                             val id = doc.getString("id") ?: doc.id
                             val senderId = doc.getString("senderId") ?: ""
@@ -74,21 +77,26 @@ object FirebaseSyncManager {
                             val timestamp = doc.getString("timestamp") ?: ""
                             val status = doc.getString("status") ?: "PENDING"
 
+                            val req = FriendRequest(
+                                id = id,
+                                senderId = senderId,
+                                senderName = senderName,
+                                senderEmail = senderEmail,
+                                receiverEmail = receiverEmail,
+                                timestamp = timestamp,
+                                status = status
+                            )
+
                             if (status == "PENDING") {
-                                list.add(
-                                    FriendRequest(
-                                        id = id,
-                                        senderId = senderId,
-                                        senderName = senderName,
-                                        senderEmail = senderEmail,
-                                        receiverEmail = receiverEmail,
-                                        timestamp = timestamp,
-                                        status = status
-                                    )
-                                )
+                                pendingList.add(req)
+                            } else if (status == "ACCEPTED") {
+                                acceptedList.add(req)
                             }
                         }
-                        onIncomingUpdate(list)
+                        onIncomingUpdate(pendingList)
+                        if (acceptedList.isNotEmpty()) {
+                            onAcceptedUpdate(acceptedList)
+                        }
                     }
                 }
         } catch (e: Exception) {
@@ -96,7 +104,8 @@ object FirebaseSyncManager {
             null
         }
 
-        // 2. Outgoing requests that were ACCEPTED by the recipient (where I was sender)
+        // 2. Where I am sender:
+        // - status == ACCEPTED -> Partner (receiver) accepted my request!
         val acceptedListener = try {
             firestore.collection("friend_requests")
                 .whereEqualTo("senderEmail", cleanEmail)
@@ -107,11 +116,10 @@ object FirebaseSyncManager {
                     }
 
                     if (snapshot != null) {
-                        val list = mutableListOf<FriendRequest>()
+                        val acceptedList = mutableListOf<FriendRequest>()
                         for (doc in snapshot.documents) {
                             val id = doc.getString("id") ?: doc.id
                             val senderId = doc.getString("senderId") ?: ""
-                            val senderName = doc.getString("senderName") ?: ""
                             val senderEmail = doc.getString("senderEmail") ?: ""
                             val receiverEmail = doc.getString("receiverEmail") ?: ""
                             val receiverName = doc.getString("receiverName") ?: receiverEmail.substringBefore("@")
@@ -119,11 +127,11 @@ object FirebaseSyncManager {
                             val status = doc.getString("status") ?: "PENDING"
 
                             if (status == "ACCEPTED") {
-                                list.add(
+                                acceptedList.add(
                                     FriendRequest(
                                         id = id,
                                         senderId = senderId,
-                                        senderName = receiverName, // Use receiver's name for sender's contact list
+                                        senderName = receiverName,
                                         senderEmail = senderEmail,
                                         receiverEmail = receiverEmail,
                                         timestamp = timestamp,
@@ -132,7 +140,9 @@ object FirebaseSyncManager {
                                 )
                             }
                         }
-                        onAcceptedUpdate(list)
+                        if (acceptedList.isNotEmpty()) {
+                            onAcceptedUpdate(acceptedList)
+                        }
                     }
                 }
         } catch (e: Exception) {
@@ -141,6 +151,105 @@ object FirebaseSyncManager {
         }
 
         return Pair(incomingListener, acceptedListener)
+    }
+
+    /**
+     * Đồng bộ toàn bộ danh bạ bạn bè và lời mời kết bạn từ Cloud Firestore.
+     * Đảm bảo dù gỡ cài đặt app, đổi máy hay xóa dữ liệu thì đăng nhập lại vẫn phục hồi 100% bạn bè.
+     */
+    fun syncCloudContactsAndFriendships(
+        myEmail: String,
+        onContactFound: (com.vhn.connectx.model.User) -> Unit,
+        onPendingFound: (FriendRequest) -> Unit,
+        onFinished: () -> Unit
+    ) {
+        val cleanEmail = myEmail.trim().lowercase()
+        if (cleanEmail.isBlank()) {
+            onFinished()
+            return
+        }
+
+        var remainingTasks = 3
+        val checkDone = {
+            remainingTasks--
+            if (remainingTasks <= 0) {
+                onFinished()
+            }
+        }
+
+        // 1. Đồng bộ từ subcollection contacts
+        firestore.collection("users").document(cleanEmail).collection("contacts")
+            .get()
+            .addOnSuccessListener { snapshot ->
+                for (doc in snapshot.documents) {
+                    val email = doc.getString("email") ?: doc.id
+                    val displayName = doc.getString("displayName") ?: email.substringBefore("@")
+                    val id = doc.getString("id") ?: "u_${email.hashCode()}"
+                    if (email.isNotBlank() && !email.equals(cleanEmail, ignoreCase = true)) {
+                        onContactFound(com.vhn.connectx.model.User(id = id, displayName = displayName, email = email, isOnline = true))
+                    }
+                }
+                checkDone()
+            }
+            .addOnFailureListener { checkDone() }
+
+        // 2. Đồng bộ các lời mời mà tôi là người nhận (receiver)
+        firestore.collection("friend_requests")
+            .whereEqualTo("receiverEmail", cleanEmail)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                for (doc in snapshot.documents) {
+                    val status = doc.getString("status") ?: "PENDING"
+                    val senderEmail = doc.getString("senderEmail")?.trim()?.lowercase() ?: ""
+                    val senderName = doc.getString("senderName") ?: senderEmail.substringBefore("@")
+                    val senderId = doc.getString("senderId") ?: "u_${senderEmail.hashCode()}"
+                    val id = doc.getString("id") ?: doc.id
+                    val timestamp = doc.getString("timestamp") ?: ""
+
+                    if (status == "ACCEPTED" && senderEmail.isNotBlank()) {
+                        onContactFound(com.vhn.connectx.model.User(id = senderId, displayName = senderName, email = senderEmail, isOnline = true))
+                    } else if (status == "PENDING" && senderEmail.isNotBlank()) {
+                        onPendingFound(
+                            FriendRequest(
+                                id = id,
+                                senderId = senderId,
+                                senderName = senderName,
+                                senderEmail = senderEmail,
+                                receiverEmail = cleanEmail,
+                                timestamp = timestamp,
+                                status = status
+                            )
+                        )
+                    }
+                }
+                checkDone()
+            }
+            .addOnFailureListener { checkDone() }
+
+        // 3. Đồng bộ các lời mời mà tôi gửi đi (sender) và đã được đồng ý
+        firestore.collection("friend_requests")
+            .whereEqualTo("senderEmail", cleanEmail)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                for (doc in snapshot.documents) {
+                    val status = doc.getString("status") ?: "PENDING"
+                    val receiverEmail = doc.getString("receiverEmail")?.trim()?.lowercase() ?: ""
+                    val receiverName = doc.getString("receiverName") ?: receiverEmail.substringBefore("@")
+
+                    if (status == "ACCEPTED" && receiverEmail.isNotBlank()) {
+                        onContactFound(
+                            com.vhn.connectx.model.User(
+                                id = "u_${receiverEmail.hashCode()}",
+                                displayName = receiverName,
+                                email = receiverEmail,
+                                isOnline = true
+                            )
+                        )
+                    }
+                }
+                checkDone()
+            }
+            .addOnFailureListener { checkDone() }
     }
 
     /**
@@ -161,12 +270,44 @@ object FirebaseSyncManager {
             .update(updates)
             .addOnSuccessListener {
                 Log.i(TAG, "Friend request $reqId marked as $status on Firestore")
+                if (status == "ACCEPTED") {
+                    firestore.collection("friend_requests").document(reqId).get()
+                        .addOnSuccessListener { doc ->
+                            val sEmail = doc.getString("senderEmail")?.trim()?.lowercase() ?: ""
+                            val sName = doc.getString("senderName") ?: sEmail.substringBefore("@")
+                            val rEmail = doc.getString("receiverEmail")?.trim()?.lowercase() ?: ""
+                            val rName = myDisplayName.ifBlank { rEmail.substringBefore("@") }
+                            if (sEmail.isNotBlank() && rEmail.isNotBlank()) {
+                                saveBilateralCloudContact(sEmail, sName, rEmail, rName)
+                            }
+                        }
+                }
                 onComplete(true)
             }
             .addOnFailureListener { e ->
                 Log.w(TAG, "Failed to update friend request status: ${e.message}")
                 onComplete(false)
             }
+    }
+
+    private fun saveBilateralCloudContact(user1Email: String, user1Name: String, user2Email: String, user2Name: String) {
+        val contactForUser1 = hashMapOf(
+            "email" to user2Email,
+            "displayName" to user2Name,
+            "id" to "u_${user2Email.hashCode()}",
+            "updatedAt" to System.currentTimeMillis()
+        )
+        val contactForUser2 = hashMapOf(
+            "email" to user1Email,
+            "displayName" to user1Name,
+            "id" to "u_${user1Email.hashCode()}",
+            "updatedAt" to System.currentTimeMillis()
+        )
+
+        firestore.collection("users").document(user1Email).collection("contacts").document(user2Email)
+            .set(contactForUser1, com.google.firebase.firestore.SetOptions.merge())
+        firestore.collection("users").document(user2Email).collection("contacts").document(user1Email)
+            .set(contactForUser2, com.google.firebase.firestore.SetOptions.merge())
     }
 
     /**

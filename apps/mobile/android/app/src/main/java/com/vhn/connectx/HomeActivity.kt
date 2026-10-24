@@ -172,9 +172,37 @@ class HomeActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshData()
-        syncFriendRequestsFromServer()
+        syncFriendsAndContactsFromCloud()
         startListeningRealtimeFriendRequests()
         startListeningIncomingCalls()
+    }
+
+    private fun syncFriendsAndContactsFromCloud() {
+        val myEmail = sessionManager.currentUser.email
+        if (myEmail.isBlank()) return
+
+        com.vhn.connectx.net.FirebaseSyncManager.syncCloudContactsAndFriendships(
+            myEmail = myEmail,
+            onContactFound = { friendUser ->
+                if (appDataStore.addContact(friendUser)) {
+                    val convId = appDataStore.getDirectConvId(myEmail, friendUser.email)
+                    appDataStore.updateConversation(
+                        convId = convId,
+                        title = friendUser.displayName,
+                        lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
+                        timestamp = "Vừa xong"
+                    )
+                }
+            },
+            onPendingFound = { pendingReq ->
+                appDataStore.sendFriendRequest(pendingReq)
+            },
+            onFinished = {
+                runOnUiThread {
+                    refreshData()
+                }
+            }
+        )
     }
 
     override fun onPause() {
@@ -297,30 +325,36 @@ class HomeActivity : AppCompatActivity() {
                 }
             },
             onAcceptedUpdate = { acceptedList ->
-                // The recipient accepted my friend request! Add them to contacts immediately!
                 var addedAny = false
                 for (req in acceptedList) {
-                    val partnerEmail = req.receiverEmail
-                    val partnerName = req.senderName.ifBlank { partnerEmail.substringBefore("@") }
-                    val partnerUser = com.vhn.connectx.model.User(
-                        id = "u_${partnerEmail.hashCode()}",
-                        displayName = partnerName,
-                        email = partnerEmail,
-                        isOnline = true
-                    )
-                    if (appDataStore.addContact(partnerUser)) {
-                        val convId = appDataStore.getDirectConvId(myEmail, partnerEmail)
-                        appDataStore.updateConversation(
-                            convId = convId,
-                            title = partnerName,
-                            lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
-                            timestamp = "Vừa xong"
+                    val isMeSender = req.senderEmail.equals(myEmail, ignoreCase = true)
+                    val partnerEmail = if (isMeSender) req.receiverEmail else req.senderEmail
+                    val partnerName = if (isMeSender) {
+                        req.senderName.ifBlank { partnerEmail.substringBefore("@") }
+                    } else {
+                        req.senderName.ifBlank { partnerEmail.substringBefore("@") }
+                    }
+
+                    if (partnerEmail.isNotBlank() && !partnerEmail.equals(myEmail, ignoreCase = true)) {
+                        val partnerUser = com.vhn.connectx.model.User(
+                            id = "u_${partnerEmail.hashCode()}",
+                            displayName = partnerName,
+                            email = partnerEmail,
+                            isOnline = true
                         )
-                        addedAny = true
+                        if (appDataStore.addContact(partnerUser)) {
+                            val convId = appDataStore.getDirectConvId(myEmail, partnerEmail)
+                            appDataStore.updateConversation(
+                                convId = convId,
+                                title = partnerName,
+                                lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
+                                timestamp = "Vừa xong"
+                            )
+                            addedAny = true
+                        }
                     }
                 }
                 if (addedAny) {
-                    Toast.makeText(this, "Đối phương đã chấp nhận lời mời kết bạn!", Toast.LENGTH_SHORT).show()
                     refreshData()
                 }
             }
