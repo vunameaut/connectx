@@ -1,6 +1,7 @@
 package com.vhn.connectx
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.EditText
@@ -10,6 +11,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -18,6 +20,7 @@ import com.vhn.connectx.adapter.CallHistoryAdapter
 import com.vhn.connectx.adapter.ContactAdapter
 import com.vhn.connectx.adapter.ConversationAdapter
 import com.vhn.connectx.adapter.StoryAdapter
+import com.vhn.connectx.data.AppDataStore
 import com.vhn.connectx.model.CallHistoryItem
 import com.vhn.connectx.model.Conversation
 import com.vhn.connectx.model.SessionManager
@@ -27,6 +30,7 @@ import com.vhn.connectx.update.UpdateManager
 class HomeActivity : AppCompatActivity() {
 
     private lateinit var sessionManager: SessionManager
+    private lateinit var appDataStore: AppDataStore
 
     // Views
     private lateinit var tvHeaderTitle: TextView
@@ -40,21 +44,29 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var bottomNav: BottomNavigationView
 
     // Tab 1: Chats
+    private lateinit var layoutStoriesRow: LinearLayout
     private lateinit var rvOnlineStories: RecyclerView
     private lateinit var storyAdapter: StoryAdapter
     private val onlineUsers = mutableListOf<User>()
 
+    private lateinit var layoutEmptyChats: View
+    private lateinit var tvRecentChatsHeader: TextView
     private lateinit var rvConversations: RecyclerView
     private lateinit var conversationAdapter: ConversationAdapter
     private val conversations = mutableListOf<Conversation>()
+    private lateinit var btnEmptyChatAddFriend: MaterialButton
 
     // Tab 2: Contacts
+    private lateinit var layoutEmptyContacts: View
+    private lateinit var tvContactsHeader: TextView
     private lateinit var rvContacts: RecyclerView
     private lateinit var contactAdapter: ContactAdapter
     private val contacts = mutableListOf<User>()
     private lateinit var btnQuickAddFriend: MaterialButton
 
     // Tab 3: Calls
+    private lateinit var layoutEmptyCalls: View
+    private lateinit var tvCallHistoryHeader: TextView
     private lateinit var rvCallHistory: RecyclerView
     private lateinit var callHistoryAdapter: CallHistoryAdapter
     private val callHistory = mutableListOf<CallHistoryItem>()
@@ -65,12 +77,16 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var tvProfileDisplayName: TextView
     private lateinit var tvProfileEmail: TextView
     private lateinit var tvProfileLargeAvatar: TextView
+    private lateinit var btnToggleTheme: LinearLayout
+    private lateinit var tvCurrentThemeLabel: TextView
+    private lateinit var btnAboutDevice: LinearLayout
     private lateinit var btnLogout: MaterialButton
     private lateinit var btnCheckUpdate: MaterialButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sessionManager = SessionManager(this)
+        appDataStore = AppDataStore.getInstance(this)
 
         if (!sessionManager.isLoggedIn) {
             startActivity(Intent(this, LoginActivity::class.java))
@@ -82,10 +98,15 @@ class HomeActivity : AppCompatActivity() {
 
         initViews()
         setupBottomNav()
-        loadInitialData()
+        refreshData()
 
-        // Check for updates in background quietly
+        // Check for updates
         UpdateManager.checkForUpdate(this, isManual = false)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshData()
     }
 
     private fun initViews() {
@@ -99,16 +120,17 @@ class HomeActivity : AppCompatActivity() {
         viewProfile = findViewById(R.id.viewProfile)
         bottomNav = findViewById(R.id.bottomNavigation)
 
-        val user = sessionManager.currentUser
-
         // Tab 1: Chats
+        layoutStoriesRow = findViewById(R.id.layoutStoriesRow)
         rvOnlineStories = findViewById(R.id.rvOnlineStories)
         rvOnlineStories.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        storyAdapter = StoryAdapter(onlineUsers) { user ->
-            openChat("c_${user.id}", user.displayName)
+        storyAdapter = StoryAdapter(onlineUsers) { targetUser ->
+            openChat("c_${targetUser.id}", targetUser.displayName)
         }
         rvOnlineStories.adapter = storyAdapter
 
+        layoutEmptyChats = findViewById(R.id.layoutEmptyChats)
+        tvRecentChatsHeader = findViewById(R.id.tvRecentChatsHeader)
         rvConversations = findViewById(R.id.rvConversations)
         rvConversations.layoutManager = LinearLayoutManager(this)
         conversationAdapter = ConversationAdapter(conversations) { conv ->
@@ -116,20 +138,28 @@ class HomeActivity : AppCompatActivity() {
         }
         rvConversations.adapter = conversationAdapter
 
-        // Tab 2
+        btnEmptyChatAddFriend = findViewById(R.id.btnEmptyChatAddFriend)
+        btnEmptyChatAddFriend.setOnClickListener { showAddFriendDialog() }
+
+        // Tab 2: Contacts
+        layoutEmptyContacts = findViewById(R.id.layoutEmptyContacts)
+        tvContactsHeader = findViewById(R.id.tvContactsHeader)
         rvContacts = findViewById(R.id.rvContacts)
         rvContacts.layoutManager = LinearLayoutManager(this)
         contactAdapter = ContactAdapter(
             contacts,
-            onChatClick = { contact -> openChat(contact.id, contact.displayName) },
+            onChatClick = { contact -> openChat("c_${contact.id}", contact.displayName) },
             onCallClick = { contact -> startCall(contact.displayName, isVideo = false) }
         )
         rvContacts.adapter = contactAdapter
+
         btnQuickAddFriend = findViewById(R.id.btnQuickAddFriend)
         btnQuickAddFriend.setOnClickListener { showAddFriendDialog() }
         btnAddAction.setOnClickListener { showAddFriendDialog() }
 
-        // Tab 3
+        // Tab 3: Calls
+        layoutEmptyCalls = findViewById(R.id.layoutEmptyCalls)
+        tvCallHistoryHeader = findViewById(R.id.tvCallHistoryHeader)
         rvCallHistory = findViewById(R.id.rvCallHistory)
         rvCallHistory.layoutManager = LinearLayoutManager(this)
         callHistoryAdapter = CallHistoryAdapter(callHistory) { item ->
@@ -140,18 +170,32 @@ class HomeActivity : AppCompatActivity() {
         btnQuickVoiceCall = findViewById(R.id.btnQuickVoiceCall)
         btnQuickVideoCall = findViewById(R.id.btnQuickVideoCall)
         btnQuickVoiceCall.setOnClickListener {
-            val contactName = contacts.firstOrNull()?.displayName ?: "Bạn bè ConnectX"
-            startCall(contactName, isVideo = false)
+            val contactName = contacts.firstOrNull()?.displayName
+            if (contactName != null) {
+                startCall(contactName, isVideo = false)
+            } else {
+                Toast.makeText(this, "Vui lòng thêm bạn bè vào danh bạ để gọi thoại", Toast.LENGTH_SHORT).show()
+                showAddFriendDialog()
+            }
         }
         btnQuickVideoCall.setOnClickListener {
-            val contactName = contacts.firstOrNull()?.displayName ?: "Bạn bè ConnectX"
-            startCall(contactName, isVideo = true)
+            val contactName = contacts.firstOrNull()?.displayName
+            if (contactName != null) {
+                startCall(contactName, isVideo = true)
+            } else {
+                Toast.makeText(this, "Vui lòng thêm bạn bè vào danh bạ để gọi video", Toast.LENGTH_SHORT).show()
+                showAddFriendDialog()
+            }
         }
 
         // Tab 4: Profile
+        val user = sessionManager.currentUser
         tvProfileDisplayName = findViewById(R.id.tvProfileDisplayName)
         tvProfileEmail = findViewById(R.id.tvProfileEmail)
         tvProfileLargeAvatar = findViewById(R.id.tvProfileLargeAvatar)
+        btnToggleTheme = findViewById(R.id.btnToggleTheme)
+        tvCurrentThemeLabel = findViewById(R.id.tvCurrentThemeLabel)
+        btnAboutDevice = findViewById(R.id.btnAboutDevice)
         btnLogout = findViewById(R.id.btnLogout)
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
 
@@ -159,6 +203,16 @@ class HomeActivity : AppCompatActivity() {
         tvProfileEmail.text = user.email
         val initial = user.displayName.ifBlank { user.email.substringBefore("@") }.ifBlank { "U" }.take(1).uppercase()
         tvProfileLargeAvatar.text = initial
+
+        updateThemeLabel()
+
+        btnToggleTheme.setOnClickListener {
+            showThemeSelectionDialog()
+        }
+
+        btnAboutDevice.setOnClickListener {
+            showAboutDeviceDialog()
+        }
 
         btnCheckUpdate.setOnClickListener {
             UpdateManager.checkForUpdate(this, isManual = true)
@@ -172,7 +226,7 @@ class HomeActivity : AppCompatActivity() {
         }
 
         btnSearch.setOnClickListener {
-            Toast.makeText(this, "Tìm kiếm tin nhắn, bạn bè & hội thoại...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Tìm kiếm bạn bè & cuộc trò chuyện", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -204,39 +258,57 @@ class HomeActivity : AppCompatActivity() {
         return true
     }
 
-    private fun loadInitialData() {
-        // Active online friends for horizontal story row
-        onlineUsers.clear()
-        onlineUsers.add(User("u1", "Nguyễn Văn An", "an.nguyen@example.com"))
-        onlineUsers.add(User("u2", "Trần Thu Hà", "ha.tran@example.com"))
-        onlineUsers.add(User("u3", "Lê Minh Trí", "tri.le@example.com"))
-        onlineUsers.add(User("u4", "Phạm Quốc Bảo", "bao.pham@example.com"))
-        onlineUsers.add(User("u5", "Hoàng Kim Ngân", "ngan.hoang@example.com"))
-        onlineUsers.add(User("u6", "Đặng Minh Quân", "quan.dang@example.com"))
-        storyAdapter.notifyDataSetChanged()
-
-        // Mock sample initial chat conversations
-        conversations.clear()
-        conversations.add(Conversation("c1", "Nguyễn Văn An", "Alo bạn ơi, lát họp chia sẻ màn hình dự án nhé!", "14:35", 2))
-        conversations.add(Conversation("c2", "Trần Thu Hà", "File tài liệu đính kèm mình đã gửi rồi đấy.", "12:10", 0))
-        conversations.add(Conversation("c3", "Nhóm Kỹ Thuật ConnectX", "Kiểm thử WebRTC & Turn Metered STUN chạy mượt mà.", "Hôm qua", 0, isGroup = true))
-        conversations.add(Conversation("c4", "Lê Minh Trí", "Cuộc gọi video chất lượng 1080p nét lắm.", "22/10", 0))
-        conversationAdapter.notifyDataSetChanged()
-
-        // Mock sample contacts
+    private fun refreshData() {
+        // 1. Contacts
         contacts.clear()
-        contacts.add(User("u1", "Nguyễn Văn An", "an.nguyen@example.com"))
-        contacts.add(User("u2", "Trần Thu Hà", "ha.tran@example.com"))
-        contacts.add(User("u3", "Lê Minh Trí", "tri.le@example.com"))
-        contacts.add(User("u4", "Phạm Quốc Bảo", "bao.pham@example.com"))
+        contacts.addAll(appDataStore.getContacts())
         contactAdapter.notifyDataSetChanged()
 
-        // Mock call history
+        if (contacts.isEmpty()) {
+            layoutEmptyContacts.visibility = View.VISIBLE
+            tvContactsHeader.visibility = View.GONE
+            rvContacts.visibility = View.GONE
+        } else {
+            layoutEmptyContacts.visibility = View.GONE
+            tvContactsHeader.visibility = View.VISIBLE
+            rvContacts.visibility = View.VISIBLE
+        }
+
+        // Online stories (friends from contacts who are online)
+        onlineUsers.clear()
+        onlineUsers.addAll(contacts)
+        storyAdapter.notifyDataSetChanged()
+        layoutStoriesRow.visibility = if (onlineUsers.isNotEmpty()) View.VISIBLE else View.GONE
+
+        // 2. Conversations
+        conversations.clear()
+        conversations.addAll(appDataStore.getConversations())
+        conversationAdapter.notifyDataSetChanged()
+
+        if (conversations.isEmpty()) {
+            layoutEmptyChats.visibility = View.VISIBLE
+            tvRecentChatsHeader.visibility = View.GONE
+            rvConversations.visibility = View.GONE
+        } else {
+            layoutEmptyChats.visibility = View.GONE
+            tvRecentChatsHeader.visibility = View.VISIBLE
+            rvConversations.visibility = View.VISIBLE
+        }
+
+        // 3. Call history
         callHistory.clear()
-        callHistory.add(CallHistoryItem("h1", "Nguyễn Văn An", "14:20 (03:45)", isVideo = true, isIncoming = true))
-        callHistory.add(CallHistoryItem("h2", "Trần Thu Hà", "Hôm qua (01:12)", isVideo = false, isIncoming = false))
-        callHistory.add(CallHistoryItem("h3", "Lê Minh Trí", "21/10 (15:30)", isVideo = true, isIncoming = true))
+        callHistory.addAll(appDataStore.getCallHistory())
         callHistoryAdapter.notifyDataSetChanged()
+
+        if (callHistory.isEmpty()) {
+            layoutEmptyCalls.visibility = View.VISIBLE
+            tvCallHistoryHeader.visibility = View.GONE
+            rvCallHistory.visibility = View.GONE
+        } else {
+            layoutEmptyCalls.visibility = View.GONE
+            tvCallHistoryHeader.visibility = View.VISIBLE
+            rvCallHistory.visibility = View.VISIBLE
+        }
     }
 
     private fun openChat(conversationId: String, title: String) {
@@ -257,25 +329,93 @@ class HomeActivity : AppCompatActivity() {
 
     private fun showAddFriendDialog() {
         val input = EditText(this).apply {
-            hint = "Nhập email hoặc tên bạn bè (vd: banbe@gmail.com)"
-            setTextColor(resources.getColor(R.color.text_primary, theme))
-            setPadding(40, 30, 40, 30)
+            hint = "Nhập email bạn bè (vd: friend@gmail.com)"
+            setPadding(44, 32, 44, 32)
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Kết bạn mới")
-            .setMessage("Nhập email người dùng ConnectX để gửi lời mời kết bạn:")
+            .setTitle("Thêm bạn bè mới")
+            .setMessage("Nhập email để thêm bạn vào danh bạ và bắt đầu nhắn tin:")
             .setView(input)
-            .setPositiveButton("Gửi kết bạn") { _, _ ->
+            .setPositiveButton("Thêm vào danh bạ") { _, _ ->
                 val query = input.text.toString().trim()
                 if (query.isNotEmpty()) {
-                    val newFriend = User("u_${System.currentTimeMillis()}", query.substringBefore("@"), query)
-                    contacts.add(0, newFriend)
-                    contactAdapter.notifyItemInserted(0)
-                    Toast.makeText(this, "Đã gửi lời mời kết bạn tới: $query", Toast.LENGTH_SHORT).show()
+                    val displayName = query.substringBefore("@")
+                    val newContact = User(
+                        id = "u_${System.currentTimeMillis()}",
+                        displayName = displayName,
+                        email = query,
+                        isOnline = true
+                    )
+                    val added = appDataStore.addContact(newContact)
+                    if (added) {
+                        Toast.makeText(this, "Đã thêm $displayName vào danh bạ!", Toast.LENGTH_SHORT).show()
+                        refreshData()
+                    } else {
+                        Toast.makeText(this, "Người dùng này đã có trong danh bạ", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
             .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun updateThemeLabel() {
+        tvCurrentThemeLabel.text = when (appDataStore.themeMode) {
+            AppCompatDelegate.MODE_NIGHT_YES -> "Giao diện Tối"
+            AppCompatDelegate.MODE_NIGHT_NO -> "Giao diện Sáng"
+            else -> "Theo hệ thống"
+        }
+    }
+
+    private fun showThemeSelectionDialog() {
+        val options = arrayOf("Giao diện Sáng (Light)", "Giao diện Tối (Dark)", "Theo cài đặt hệ thống")
+        val currentChecked = when (appDataStore.themeMode) {
+            AppCompatDelegate.MODE_NIGHT_NO -> 0
+            AppCompatDelegate.MODE_NIGHT_YES -> 1
+            else -> 2
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Tùy chọn giao diện")
+            .setSingleChoiceItems(options, currentChecked) { dialog, which ->
+                val selectedMode = when (which) {
+                    0 -> AppCompatDelegate.MODE_NIGHT_NO
+                    1 -> AppCompatDelegate.MODE_NIGHT_YES
+                    else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                }
+                appDataStore.themeMode = selectedMode
+                updateThemeLabel()
+                dialog.dismiss()
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun showAboutDeviceDialog() {
+        val appVersion = BuildConfig.VERSION_NAME
+        val deviceModel = "${Build.MANUFACTURER.uppercase()} ${Build.MODEL}"
+        val androidVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+
+        val infoMessage = """
+            📱 THIẾT BỊ & HỆ THỐNG
+            • Thiết bị: $deviceModel
+            • Phiên bản HĐH: $androidVersion
+            • Kiến trúc CPU: ${Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"}
+
+            🚀 ỨNG DỤNG CONNECTX
+            • Phiên bản: v$appVersion (Bản phát hành chính thức)
+            • Trình bảo vệ: FLAG_SECURE (Chống quay màn hình trái phép)
+            • Truyền thông: WebRTC Audio/Video Engine + Screen Sharing
+            • Mã hóa: Bảo mật kết nối E2E
+
+            © 2026 ConnectX Corporation. All rights reserved.
+        """.trimIndent()
+
+        AlertDialog.Builder(this)
+            .setTitle("Giới thiệu ứng dụng & Thiết bị")
+            .setMessage(infoMessage)
+            .setPositiveButton("Đóng", null)
             .show()
     }
 }

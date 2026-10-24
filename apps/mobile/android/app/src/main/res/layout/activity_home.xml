@@ -56,7 +56,7 @@
             android:layout_marginStart="10dp"
             android:background="@drawable/bg_card_rounded"
             android:src="@drawable/ic_contacts"
-            app:tint="@color/colorPrimaryLight"
+            app:tint="@color/colorPrimary"
             android:contentDescription="Thêm bạn" />
     </LinearLayout>
 
@@ -80,19 +80,21 @@
             android:orientation="vertical"
             android:visibility="visible">
 
-            <!-- Horizontal Active Stories Row (Like Zalo / Messenger) -->
+            <!-- Horizontal Active Stories Row -->
             <LinearLayout
+                android:id="@+id/layoutStoriesRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:paddingTop="12dp"
                 android:paddingBottom="8dp"
-                android:background="@color/bg_dark">
+                android:background="@color/bg_dark"
+                android:visibility="gone">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="ĐANG HOẠT ĐỘNG"
+                    android:text="BẠN BÈ TRỰC TUYẾN"
                     android:textColor="@color/text_muted"
                     android:textSize="11sp"
                     android:textStyle="bold"
@@ -109,13 +111,56 @@
                     android:paddingHorizontal="12dp" />
             </LinearLayout>
 
-            <View
+            <!-- Empty Chats State -->
+            <LinearLayout
+                android:id="@+id/layoutEmptyChats"
                 android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@color/divider" />
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:padding="32dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="72dp"
+                    android:layout_height="72dp"
+                    android:src="@drawable/ic_chat"
+                    app:tint="@color/text_muted"
+                    android:alpha="0.4"
+                    android:contentDescription="Empty Chats" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Chưa có cuộc trò chuyện nào"
+                    android:textColor="@color/text_primary"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Hãy kết bạn mới và bắt đầu trò chuyện ngay bây giờ!"
+                    android:textColor="@color/text_muted"
+                    android:textSize="13sp"
+                    android:gravity="center"
+                    android:layout_marginTop="6dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnEmptyChatAddFriend"
+                    android:layout_width="wrap_content"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="20dp"
+                    android:text="Tìm &amp; Kết bạn mới"
+                    android:textSize="13sp"
+                    app:cornerRadius="23dp"
+                    app:backgroundTint="@color/colorPrimary" />
+            </LinearLayout>
 
             <!-- Conversations List Header -->
             <TextView
+                android:id="@+id/tvRecentChatsHeader"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="TIN NHẮN GẦN ĐÂY"
@@ -159,7 +204,7 @@
                     android:layout_width="38dp"
                     android:layout_height="38dp"
                     android:src="@drawable/ic_contacts"
-                    app:tint="@color/colorPrimaryLight" />
+                    app:tint="@color/colorPrimary" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -179,7 +224,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Tìm kiếm và nhắn tin ngay lập tức"
+                        android:text="Nhập email để thêm vào danh bạ và gọi video"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp"
                         android:layout_marginTop="2dp" />
@@ -189,13 +234,51 @@
                     android:id="@+id/btnQuickAddFriend"
                     android:layout_width="wrap_content"
                     android:layout_height="40dp"
-                    android:text="Kết bạn"
+                    android:text="Thêm bạn"
                     android:textSize="13sp"
                     app:cornerRadius="20dp"
                     app:backgroundTint="@color/colorPrimary" />
             </LinearLayout>
 
+            <!-- Empty Contacts State -->
+            <LinearLayout
+                android:id="@+id/layoutEmptyContacts"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:padding="32dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="72dp"
+                    android:layout_height="72dp"
+                    android:src="@drawable/ic_contacts"
+                    app:tint="@color/text_muted"
+                    android:alpha="0.4"
+                    android:contentDescription="Empty Contacts" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Danh bạ hiện đang trống"
+                    android:textColor="@color/text_primary"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Bấm 'Thêm bạn' ở trên để kết nối với người quen ngay lập tức."
+                    android:textColor="@color/text_muted"
+                    android:textSize="13sp"
+                    android:gravity="center"
+                    android:layout_marginTop="6dp" />
+            </LinearLayout>
+
             <TextView
+                android:id="@+id/tvContactsHeader"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="DANH SÁCH BẠN BÈ"
@@ -238,6 +321,8 @@
                     app:icon="@drawable/ic_calls"
                     app:cornerRadius="14dp"
                     app:backgroundTint="@color/bg_card"
+                    app:strokeColor="@color/border_subtle"
+                    app:strokeWidth="1dp"
                     android:textColor="@color/text_primary" />
 
                 <com.google.android.material.button.MaterialButton
@@ -253,7 +338,45 @@
                     android:textColor="@color/white" />
             </LinearLayout>
 
+            <!-- Empty Calls State -->
+            <LinearLayout
+                android:id="@+id/layoutEmptyCalls"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:padding="32dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="72dp"
+                    android:layout_height="72dp"
+                    android:src="@drawable/ic_calls"
+                    app:tint="@color/text_muted"
+                    android:alpha="0.4"
+                    android:contentDescription="Empty Calls" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Chưa có lịch sử cuộc gọi"
+                    android:textColor="@color/text_primary"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Bạn có thể gọi thoại hoặc gọi video với chất lượng HD miễn phí."
+                    android:textColor="@color/text_muted"
+                    android:textSize="13sp"
+                    android:gravity="center"
+                    android:layout_marginTop="6dp" />
+            </LinearLayout>
+
             <TextView
+                android:id="@+id/tvCallHistoryHeader"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="LỊCH SỬ CUỘC GỌI"
@@ -286,7 +409,7 @@
                 android:orientation="vertical"
                 android:padding="20dp">
 
-                <!-- Profile Card with Cover Header -->
+                <!-- Profile Card with Avatar -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -305,7 +428,7 @@
                             android:layout_height="84dp"
                             android:background="@drawable/bg_card_secondary"
                             android:text="U"
-                            android:textColor="@color/white"
+                            android:textColor="@color/text_primary"
                             android:textSize="36sp"
                             android:textStyle="bold"
                             android:gravity="center" />
@@ -337,159 +460,93 @@
                         android:textColor="@color/text_secondary"
                         android:textSize="14sp"
                         android:layout_marginTop="4dp" />
-
-                    <!-- Quick Stats Row -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center"
-                        android:layout_marginTop="20dp"
-                        android:background="@drawable/bg_search_bar"
-                        android:paddingVertical="10dp">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="128"
-                                android:textColor="@color/colorPrimaryLight"
-                                android:textSize="16sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Bạn bè"
-                                android:textColor="@color/text_muted"
-                                android:textSize="11sp" />
-                        </LinearLayout>
-
-                        <View
-                            android:layout_width="1dp"
-                            android:layout_height="24dp"
-                            android:background="@color/divider" />
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="45"
-                                android:textColor="@color/status_online"
-                                android:textSize="16sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Cuộc gọi"
-                                android:textColor="@color/text_muted"
-                                android:textSize="11sp" />
-                        </LinearLayout>
-
-                        <View
-                            android:layout_width="1dp"
-                            android:layout_height="24dp"
-                            android:background="@color/divider" />
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:gravity="center"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="E2E"
-                                android:textColor="@color/colorIndigo"
-                                android:textSize="16sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Mã hóa"
-                                android:textColor="@color/text_muted"
-                                android:textSize="11sp" />
-                        </LinearLayout>
-                    </LinearLayout>
                 </LinearLayout>
 
-                <!-- System Specifications Card -->
+                <!-- Settings & Preferences List -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:background="@drawable/bg_card_rounded"
-                    android:padding="16dp"
-                    android:layout_marginTop="16dp">
+                    android:layout_marginTop="16dp"
+                    android:padding="12dp">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="THÔNG TIN HỆ THỐNG"
-                        android:textColor="@color/text_muted"
-                        android:textSize="11sp"
-                        android:textStyle="bold"
-                        android:letterSpacing="0.08" />
+                    <!-- Theme Toggle Option -->
+                    <LinearLayout
+                        android:id="@+id/btnToggleTheme"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="12dp"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:background="?attr/selectableItemBackground">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="• Google Sign-In &amp; Firebase Auth"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        android:layout_marginTop="8dp" />
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Giao diện (Sáng / Tối)"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="• WebRTC P2P + Metered TURN Relay STUN"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        android:layout_marginTop="4dp" />
+                        <TextView
+                            android:id="@+id/tvCurrentThemeLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tự động"
+                            android:textColor="@color/colorPrimary"
+                            android:textSize="14sp" />
+                    </LinearLayout>
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="• MediaProjection Android 14+ Foreground Service"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        android:layout_marginTop="4dp" />
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/divider"
+                        android:layout_marginVertical="6dp" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="• Bảo vệ màn hình chống chụp trộm FLAG_SECURE"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        android:layout_marginTop="4dp" />
+                    <!-- About App & Device Option -->
+                    <LinearLayout
+                        android:id="@+id/btnAboutDevice"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="12dp"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:background="?attr/selectableItemBackground">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Giới thiệu ứng dụng &amp; Thiết bị"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="v1.0.1"
+                            android:textColor="@color/text_muted"
+                            android:textSize="13sp" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <View
                     android:layout_width="match_parent"
-                    android:layout_height="24dp" />
+                    android:layout_height="16dp" />
 
                 <!-- Check Update Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCheckUpdate"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:text="Kiểm tra bản cập nhật mới (GitHub)"
+                    android:text="Kiểm tra bản cập nhật mới"
                     android:textColor="@color/white"
                     app:icon="@drawable/ic_search"
                     app:cornerRadius="26dp"
@@ -516,7 +573,7 @@
         android:layout_height="1dp"
         android:background="@color/divider" />
 
-    <!-- Bottom Navigation Bar with Custom Tint Selector -->
+    <!-- Bottom Navigation Bar -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomNavigation"
         android:layout_width="match_parent"

@@ -2,11 +2,21 @@ package com.vhn.connectx
 
 import android.app.Application
 import android.util.Log
+import androidx.appcompat.app.AppCompatDelegate
 import com.google.firebase.FirebaseApp
+import com.vhn.connectx.data.AppDataStore
 
 class MainApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        
+        // Apply saved theme mode (Light / Dark / System default)
+        try {
+            val appDataStore = AppDataStore.getInstance(this)
+            AppCompatDelegate.setDefaultNightMode(appDataStore.themeMode)
+        } catch (e: Exception) {
+            Log.w("MainApplication", "Theme initialization warning: ${e.message}")
+        }
         try {
             if (FirebaseApp.getApps(this).isEmpty()) {
                 FirebaseApp.initializeApp(this)

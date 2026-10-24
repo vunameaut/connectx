@@ -12,13 +12,13 @@
         android:orientation="vertical"
         android:gravity="center_horizontal"
         android:paddingHorizontal="24dp"
-        android:paddingVertical="32dp">
+        android:paddingVertical="36dp">
 
         <!-- Logo Container -->
         <ImageView
             android:id="@+id/ivLogo"
-            android:layout_width="84dp"
-            android:layout_height="84dp"
+            android:layout_width="88dp"
+            android:layout_height="88dp"
             android:src="@drawable/ic_connectx_logo"
             android:contentDescription="ConnectX Brand Logo" />
 
@@ -28,7 +28,7 @@
             android:layout_height="wrap_content"
             android:text="ConnectX"
             android:textColor="@color/text_primary"
-            android:textSize="30sp"
+            android:textSize="32sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif-black"
             android:layout_marginTop="12dp" />
@@ -37,9 +37,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Quản lý bởi Firebase • Lưu trữ Supabase • Media Cloudinary"
-            android:textColor="@color/colorPrimaryLight"
-            android:textSize="12sp"
+            android:text="Kết nối tức thì • Nhắn tin &amp; Gọi video bảo mật"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
             android:gravity="center"
             android:layout_marginTop="4dp" />
 
@@ -48,7 +48,7 @@
             android:id="@+id/btnGoogleSignIn"
             android:layout_width="match_parent"
             android:layout_height="54dp"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="28dp"
             android:text="@string/login_with_google"
             android:textColor="#0F172A"
             android:textSize="15sp"
@@ -59,7 +59,9 @@
             app:iconTint="@null"
             app:cornerRadius="27dp"
             app:backgroundTint="#FFFFFF"
-            app:elevation="4dp" />
+            app:strokeColor="@color/border_subtle"
+            app:strokeWidth="1dp"
+            app:elevation="2dp" />
 
         <!-- Divider with OR text -->
         <LinearLayout
@@ -67,8 +69,8 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginTop="20dp"
-            android:layout_marginBottom="16dp">
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="20dp">
 
             <View
                 android:layout_width="0dp"
@@ -79,12 +81,12 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="HOẶC ĐĂNG NHẬP BẰNG TÀI KHOẢN FIREBASE"
+                android:text="HOẶC ĐĂNG NHẬP VỚI EMAIL"
                 android:textColor="@color/text_muted"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textStyle="bold"
-                android:letterSpacing="0.05"
-                android:layout_marginHorizontal="10dp" />
+                android:letterSpacing="0.06"
+                android:layout_marginHorizontal="12dp" />
 
             <View
                 android:layout_width="0dp"
@@ -93,33 +95,51 @@
                 android:background="@color/divider" />
         </LinearLayout>
 
-        <!-- Firebase Email & Password Form Container -->
+        <!-- Email & Password Form Container -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="@drawable/bg_card_rounded"
-            android:padding="16dp">
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Email tài khoản"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="6dp" />
 
             <EditText
                 android:id="@+id/etEmail"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="50dp"
                 android:background="@drawable/bg_input_box"
-                android:hint="Email (vd: user@connectx.app)"
+                android:hint="name@example.com"
                 android:textColorHint="@color/text_hint"
                 android:textColor="@color/text_primary"
                 android:textSize="14sp"
                 android:paddingHorizontal="16dp"
                 android:inputType="textEmailAddress" />
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mật khẩu"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginTop="14dp"
+                android:layout_marginBottom="6dp" />
+
             <EditText
                 android:id="@+id/etPassword"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginTop="10dp"
+                android:layout_height="50dp"
                 android:background="@drawable/bg_input_box"
-                android:hint="Mật khẩu (ít nhất 6 ký tự)"
+                android:hint="Nhập mật khẩu (tối thiểu 6 ký tự)"
                 android:textColorHint="@color/text_hint"
                 android:textColor="@color/text_primary"
                 android:textSize="14sp"
@@ -130,90 +150,35 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="12dp">
+                android:layout_marginTop="20dp">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnEmailSignIn"
                     android:layout_width="0dp"
-                    android:layout_height="46dp"
+                    android:layout_height="48dp"
                     android:layout_weight="1"
                     android:layout_marginEnd="6dp"
                     android:text="Đăng nhập"
-                    android:textSize="13sp"
+                    android:textSize="14sp"
                     android:textStyle="bold"
-                    app:cornerRadius="23dp"
+                    app:cornerRadius="24dp"
                     app:backgroundTint="@color/colorPrimary" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnRegisterEmail"
                     android:layout_width="0dp"
-                    android:layout_height="46dp"
+                    android:layout_height="48dp"
                     android:layout_weight="1"
                     android:layout_marginStart="6dp"
-                    android:text="Đăng ký mới"
-                    android:textSize="13sp"
-                    app:cornerRadius="23dp"
+                    android:text="Đăng ký"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="24dp"
+                    android:textColor="@color/text_primary"
                     app:backgroundTint="@color/bg_card_secondary"
                     app:strokeColor="@color/border_subtle"
                     app:strokeWidth="1dp" />
             </LinearLayout>
-        </LinearLayout>
-
-        <!-- Fast 1-Touch Test Accounts -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="VÀO NHANH TÀI KHOẢN MẪU (1-TOUCH)"
-            android:textColor="@color/text_muted"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.05"
-            android:layout_marginTop="20dp"
-            android:layout_marginBottom="10dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnQuickAlice"
-                android:layout_width="0dp"
-                android:layout_height="42dp"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:text="Alice C."
-                android:textSize="12sp"
-                app:cornerRadius="21dp"
-                app:backgroundTint="@color/bg_card"
-                app:strokeColor="@color/border_subtle"
-                app:strokeWidth="1dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnQuickBob"
-                android:layout_width="0dp"
-                android:layout_height="42dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="4dp"
-                android:text="Bob M."
-                android:textSize="12sp"
-                app:cornerRadius="21dp"
-                app:backgroundTint="@color/bg_card"
-                app:strokeColor="@color/border_subtle"
-                app:strokeWidth="1dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnGuestSignIn"
-                android:layout_width="0dp"
-                android:layout_height="42dp"
-                android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:text="Khách"
-                android:textSize="12sp"
-                app:cornerRadius="21dp"
-                app:backgroundTint="@color/bg_card"
-                app:strokeColor="@color/border_subtle"
-                app:strokeWidth="1dp" />
         </LinearLayout>
 
         <TextView
@@ -221,17 +186,17 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@color/text_secondary"
-            android:textSize="12sp"
+            android:textSize="13sp"
             android:layout_marginTop="20dp"
             android:gravity="center"
-            android:text="Sẵn sàng kết nối Firebase, Supabase &amp; Cloudinary" />
+            android:text="" />
 
         <ProgressBar
             android:id="@+id/pbLoginLoading"
             android:layout_width="32dp"
             android:layout_height="32dp"
-            android:layout_marginTop="14dp"
-            android:indeterminateTint="@color/colorPrimaryLight"
+            android:layout_marginTop="12dp"
+            android:indeterminateTint="@color/colorPrimary"
             android:visibility="gone" />
 
     </LinearLayout>

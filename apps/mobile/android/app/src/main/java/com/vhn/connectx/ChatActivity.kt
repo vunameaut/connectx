@@ -12,6 +12,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.vhn.connectx.adapter.MessageAdapter
+import com.vhn.connectx.data.AppDataStore
+import com.vhn.connectx.model.CallHistoryItem
 import com.vhn.connectx.model.Message
 import com.vhn.connectx.model.SessionManager
 import com.vhn.connectx.net.ApiClient
@@ -22,6 +24,7 @@ import java.util.Locale
 class ChatActivity : AppCompatActivity() {
 
     private lateinit var sessionManager: SessionManager
+    private lateinit var appDataStore: AppDataStore
     private lateinit var rvMessages: RecyclerView
     private lateinit var messageAdapter: MessageAdapter
     private val messages = mutableListOf<Message>()
@@ -36,19 +39,20 @@ class ChatActivity : AppCompatActivity() {
     private lateinit var btnAttachment: ImageView
 
     private var convId: String = "c1"
-    private var contactTitle: String = "Bạn bè ConnectX"
+    private var contactTitle: String = "Bạn bè"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_chat)
 
         sessionManager = SessionManager(this)
+        appDataStore = AppDataStore.getInstance(this)
 
         convId = intent.getStringExtra("EXTRA_CONV_ID") ?: "c1"
-        contactTitle = intent.getStringExtra("EXTRA_CONV_TITLE") ?: "Bạn bè ConnectX"
+        contactTitle = intent.getStringExtra("EXTRA_CONV_TITLE") ?: "Bạn bè"
 
         initViews()
-        loadInitialMessages()
+        loadMessages()
     }
 
     private fun initViews() {
@@ -62,11 +66,20 @@ class ChatActivity : AppCompatActivity() {
         btnAttachment = findViewById(R.id.btnAttachment)
 
         tvChatContactName.text = contactTitle
-        tvChatAvatar.text = contactTitle.take(1).uppercase()
+        tvChatAvatar.text = contactTitle.ifBlank { "U" }.take(1).uppercase()
 
         btnBack.setOnClickListener { finish() }
 
         btnChatVoiceCall.setOnClickListener {
+            val callItem = CallHistoryItem(
+                id = "call_${System.currentTimeMillis()}",
+                contactName = contactTitle,
+                timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
+                isVideo = false,
+                isIncoming = false
+            )
+            appDataStore.addCallHistory(callItem)
+
             val intent = Intent(this, CallActivity::class.java).apply {
                 putExtra("EXTRA_CONTACT_NAME", contactTitle)
                 putExtra("EXTRA_IS_VIDEO", false)
@@ -75,6 +88,15 @@ class ChatActivity : AppCompatActivity() {
         }
 
         btnChatVideoCall.setOnClickListener {
+            val callItem = CallHistoryItem(
+                id = "call_${System.currentTimeMillis()}",
+                contactName = contactTitle,
+                timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
+                isVideo = true,
+                isIncoming = false
+            )
+            appDataStore.addCallHistory(callItem)
+
             val intent = Intent(this, CallActivity::class.java).apply {
                 putExtra("EXTRA_CONTACT_NAME", contactTitle)
                 putExtra("EXTRA_IS_VIDEO", true)
@@ -104,52 +126,23 @@ class ChatActivity : AppCompatActivity() {
 
         val btnVoiceRecord: ImageView = findViewById(R.id.btnVoiceRecord)
         btnVoiceRecord.setOnClickListener {
-            Toast.makeText(this, "Nhấn giữ để ghi âm tin nhắn thoại...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Nhấn giữ để gửi tin nhắn thoại", Toast.LENGTH_SHORT).show()
         }
 
         val btnChatMore: ImageView = findViewById(R.id.btnChatMore)
         btnChatMore.setOnClickListener {
-            Toast.makeText(this, "Tùy chọn: Tìm kiếm tin nhắn, Đổi hình nền, Thông tin bạn bè", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Tùy chọn: Tìm kiếm tin nhắn, Đổi hình nền", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun loadInitialMessages() {
+    private fun loadMessages() {
         messages.clear()
-        messages.add(
-            Message(
-                id = "m1",
-                conversationId = convId,
-                senderId = "other",
-                senderName = contactTitle,
-                text = "Chào bạn! Dự án ConnectX đã hoàn thành các module chat và cuộc gọi rồi nhé.",
-                timestamp = "14:30",
-                isMe = false
-            )
-        )
-        messages.add(
-            Message(
-                id = "m2",
-                conversationId = convId,
-                senderId = sessionManager.currentUser.id,
-                senderName = sessionManager.currentUser.displayName,
-                text = "Tuyệt vời quá! Bạn bấm nút gọi video rồi chia sẻ màn hình thử nhé.",
-                timestamp = "14:31",
-                isMe = true
-            )
-        )
-        messages.add(
-            Message(
-                id = "m3",
-                conversationId = convId,
-                senderId = "other",
-                senderName = contactTitle,
-                text = "Ok, mình sẵn sàng rồi đây!",
-                timestamp = "14:32",
-                isMe = false
-            )
-        )
+        val saved = appDataStore.getMessages(convId)
+        messages.addAll(saved)
         messageAdapter.notifyDataSetChanged()
-        rvMessages.scrollToPosition(messages.size - 1)
+        if (messages.isNotEmpty()) {
+            rvMessages.scrollToPosition(messages.size - 1)
+        }
     }
 
     private fun sendMessage() {
@@ -167,6 +160,7 @@ class ChatActivity : AppCompatActivity() {
             isMe = true
         )
 
+        appDataStore.addMessage(convId, newMsg)
         messageAdapter.addMessage(newMsg)
         etMessageInput.setText("")
         rvMessages.smoothScrollToPosition(messages.size - 1)
@@ -174,8 +168,8 @@ class ChatActivity : AppCompatActivity() {
 
     private fun showMediaUploadDialog() {
         val options = arrayOf(
-            "📷 Gửi ảnh mẫu (Cloudinary CDN)",
-            "📁 Đính kèm tài liệu (Supabase Storage)",
+            "📷 Gửi ảnh chụp từ thư viện",
+            "📁 Đính kèm tài liệu",
             "📸 Chụp ảnh nhanh từ camera"
         )
 
@@ -193,10 +187,9 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun sendSampleImageMessage() {
-        Toast.makeText(this, "Đang ký upload Cloudinary qua API...", Toast.LENGTH_SHORT).show()
         val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+        val supabaseToken = sessionManager.supabaseToken ?: "token_user"
 
-        val supabaseToken = sessionManager.supabaseToken ?: "mock_supabase_token"
         ApiClient.signCloudinaryUpload(
             conversationId = convId,
             mimeType = "image/jpeg",
@@ -206,7 +199,7 @@ class ChatActivity : AppCompatActivity() {
             val cloudUrl = if (ticket != null) {
                 "https://res.cloudinary.com/${ticket.cloudName}/image/upload/${ticket.folder}/photo_${System.currentTimeMillis()}.jpg"
             } else {
-                "https://res.cloudinary.com/connectx-cloud/image/upload/v1/conversations/photo_sample.jpg"
+                "https://images.unsplash.com/photo-1579202673506-ca3ce28943ef?w=600"
             }
 
             val imageMsg = Message(
@@ -214,13 +207,14 @@ class ChatActivity : AppCompatActivity() {
                 conversationId = convId,
                 senderId = sessionManager.currentUser.id,
                 senderName = sessionManager.currentUser.displayName,
-                text = "📷 [Hình ảnh Cloudinary]: $cloudUrl",
+                text = "📷 [Hình ảnh]: $cloudUrl",
                 timestamp = currentTime,
                 isMe = true
             )
+            appDataStore.addMessage(convId, imageMsg)
             messageAdapter.addMessage(imageMsg)
             rvMessages.smoothScrollToPosition(messages.size - 1)
-            Toast.makeText(this, "Đã tải ảnh lên Cloudinary và lưu dữ liệu vào Supabase!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Đã gửi hình ảnh thành công!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -231,12 +225,13 @@ class ChatActivity : AppCompatActivity() {
             conversationId = convId,
             senderId = sessionManager.currentUser.id,
             senderName = sessionManager.currentUser.displayName,
-            text = "📁 [Tài liệu Supabase Storage]: Tailieu_DuAn_ConnectX.pdf (1.2 MB)",
+            text = "📁 [Tài liệu]: TaiLieu_CongViec.pdf (1.2 MB)",
             timestamp = currentTime,
             isMe = true
         )
+        appDataStore.addMessage(convId, docMsg)
         messageAdapter.addMessage(docMsg)
         rvMessages.smoothScrollToPosition(messages.size - 1)
-        Toast.makeText(this, "Đã lưu tài liệu vào Supabase Storage!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Đã gửi tài liệu thành công!", Toast.LENGTH_SHORT).show()
     }
 }

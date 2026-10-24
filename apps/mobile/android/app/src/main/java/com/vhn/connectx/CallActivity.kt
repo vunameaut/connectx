@@ -17,6 +17,11 @@ import androidx.appcompat.app.AppCompatActivity
 import com.connectx.screencapture.ScreenCaptureModule
 import com.connectx.screencapture.ScreenCaptureService
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.vhn.connectx.data.AppDataStore
+import com.vhn.connectx.model.CallHistoryItem
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class CallActivity : AppCompatActivity() {
 
@@ -61,8 +66,8 @@ class CallActivity : AppCompatActivity() {
             when (action) {
                 ScreenCaptureService.BROADCAST_SCREEN_CAPTURE_STARTED -> {
                     isScreenSharing = true
-                    updateScreenShareUI(true, "ĐANG CHIA SẺ MÀN HÌNH (Foreground Service)")
-                    Toast.makeText(this@CallActivity, "Đang chia sẻ toàn bộ màn hình", Toast.LENGTH_SHORT).show()
+                    updateScreenShareUI(true, "ĐANG CHIA SẺ MÀN HÌNH")
+                    Toast.makeText(this@CallActivity, "Đang chia sẻ màn hình", Toast.LENGTH_SHORT).show()
                 }
                 ScreenCaptureService.BROADCAST_SCREEN_CAPTURE_STOPPED -> {
                     isScreenSharing = false
@@ -82,8 +87,18 @@ class CallActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_call)
 
-        val contactName = intent.getStringExtra("EXTRA_CONTACT_NAME") ?: "Bạn bè ConnectX"
+        val contactName = intent.getStringExtra("EXTRA_CONTACT_NAME") ?: "Bạn bè"
         isVideoEnabled = intent.getBooleanExtra("EXTRA_IS_VIDEO", true)
+
+        // Save real call into history
+        val callItem = CallHistoryItem(
+            id = "call_${System.currentTimeMillis()}",
+            contactName = contactName,
+            timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
+            isVideo = isVideoEnabled,
+            isIncoming = false
+        )
+        AppDataStore.getInstance(this).addCallHistory(callItem)
 
         initViews(contactName)
         setupCallControls()
