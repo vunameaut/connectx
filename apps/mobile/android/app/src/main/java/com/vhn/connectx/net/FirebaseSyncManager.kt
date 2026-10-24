@@ -538,7 +538,7 @@ object FirebaseSyncManager {
         val field = if (type.equals("offer", ignoreCase = true)) "offerSdp" else "answerSdp"
         firestore.collection("active_calls")
             .document(callId)
-            .update(field, sdpDescription)
+            .set(mapOf(field to sdpDescription), com.google.firebase.firestore.SetOptions.merge())
     }
 
     /**

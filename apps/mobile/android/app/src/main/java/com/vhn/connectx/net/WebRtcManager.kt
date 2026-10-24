@@ -93,11 +93,20 @@ class WebRtcManager(
         localAudioTrack?.setEnabled(true)
     }
 
+    private val pendingIceCandidates = mutableListOf<IceCandidate>()
+    private var isRemoteDescriptionSet = false
+    private var isOfferProcessed = false
+    private var isAnswerProcessed = false
+
     /**
      * Khởi tạo Local Camera
      */
     fun startCamera(localRenderer: SurfaceViewRenderer, isFront: Boolean = true) {
-        localRenderer.init(eglContext, null)
+        try {
+            localRenderer.init(eglContext, null)
+        } catch (e: Exception) {
+            Log.w(TAG, "localRenderer already initialized: ${e.message}")
+        }
         localRenderer.setMirror(isFront)
 
         cameraCapturer = createCameraCapturer(isFront)
@@ -136,17 +145,29 @@ class WebRtcManager(
      * Bắt đầu PeerConnection và kết nối
      */
     fun startPeerConnection(remoteRenderer: SurfaceViewRenderer) {
-        remoteRenderer.init(eglContext, null)
+        try {
+            remoteRenderer.init(eglContext, null)
+        } catch (e: Exception) {
+            Log.w(TAG, "remoteRenderer already initialized: ${e.message}")
+        }
 
         val iceServers = listOf(
             PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
             PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun3.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun4.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun.cloudflare.com:3478").createIceServer(),
             PeerConnection.IceServer.builder("stun:stun.relay.metered.ca:80").createIceServer(),
             PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:80")
                 .setUsername("openrelayproject")
                 .setPassword("openrelayproject")
                 .createIceServer(),
             PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:443")
+                .setUsername("openrelayproject")
+                .setPassword("openrelayproject")
+                .createIceServer(),
+            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:443?transport=tcp")
                 .setUsername("openrelayproject")
                 .setPassword("openrelayproject")
                 .createIceServer()
@@ -159,12 +180,12 @@ class WebRtcManager(
 
         peerConnection = peerConnectionFactory?.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
             override fun onIceCandidate(candidate: IceCandidate?) {
-                if (candidate != null) {
+                if (candidate != null && !candidate.sdp.isNullOrBlank()) {
                     val myRole = if (isCaller) "CALLER" else "CALLEE"
                     FirebaseSyncManager.sendIceCandidate(
                         callId = callId,
                         senderRole = myRole,
-                        sdpMid = candidate.sdpMid,
+                        sdpMid = candidate.sdpMid ?: "0",
                         sdpMLineIndex = candidate.sdpMLineIndex,
                         candidate = candidate.sdp
                     )
@@ -183,11 +204,39 @@ class WebRtcManager(
                 }
             }
 
+            override fun onAddStream(stream: MediaStream?) {
+                if (stream != null) {
+                    if (stream.videoTracks.isNotEmpty() && remoteVideoTrack == null) {
+                        val track = stream.videoTracks[0]
+                        remoteVideoTrack = track
+                        remoteVideoTrack?.addSink(remoteRenderer)
+                        onRemoteVideoTrackReady?.invoke(track)
+                    }
+                    if (stream.audioTracks.isNotEmpty() && remoteAudioTrack == null) {
+                        remoteAudioTrack = stream.audioTracks[0]
+                        remoteAudioTrack?.setEnabled(true)
+                    }
+                }
+            }
+
             override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {
                 Log.d(TAG, "ICE Connection State: $newState")
-                if (newState == PeerConnection.IceConnectionState.DISCONNECTED ||
-                    newState == PeerConnection.IceConnectionState.FAILED) {
-                    onCallDisconnected?.invoke()
+                // Không ngắt cuộc gọi ngay khi DISCONNECTED hoặc FAILED để cho phép WebRTC tự động tái kết nối
+                when (newState) {
+                    PeerConnection.IceConnectionState.CONNECTED,
+                    PeerConnection.IceConnectionState.COMPLETED -> {
+                        Log.i(TAG, "WebRTC media channel connected successfully")
+                    }
+                    PeerConnection.IceConnectionState.DISCONNECTED -> {
+                        Log.w(TAG, "WebRTC ICE temporarily disconnected, maintaining call session...")
+                    }
+                    PeerConnection.IceConnectionState.FAILED -> {
+                        Log.e(TAG, "WebRTC ICE connection failed, retrying...")
+                    }
+                    PeerConnection.IceConnectionState.CLOSED -> {
+                        onCallDisconnected?.invoke()
+                    }
+                    else -> {}
                 }
             }
 
@@ -195,7 +244,6 @@ class WebRtcManager(
             override fun onIceConnectionReceivingChange(p0: Boolean) {}
             override fun onIceGatheringChange(p0: PeerConnection.IceGatheringState?) {}
             override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {}
-            override fun onAddStream(stream: MediaStream?) {}
             override fun onRemoveStream(stream: MediaStream?) {}
             override fun onDataChannel(p0: DataChannel?) {}
             override fun onRenegotiationNeeded() {}
@@ -215,7 +263,13 @@ class WebRtcManager(
         val partnerRole = if (isCaller) "CALLEE" else "CALLER"
         FirebaseSyncManager.listenRemoteIceCandidates(callId, partnerRole) { sdpMid, sdpMLineIndex, candidateStr ->
             val iceCandidate = IceCandidate(sdpMid, sdpMLineIndex, candidateStr)
-            peerConnection?.addIceCandidate(iceCandidate)
+            synchronized(pendingIceCandidates) {
+                if (isRemoteDescriptionSet && peerConnection != null) {
+                    peerConnection?.addIceCandidate(iceCandidate)
+                } else {
+                    pendingIceCandidates.add(iceCandidate)
+                }
+            }
         }
 
         if (isCaller) {
@@ -225,6 +279,16 @@ class WebRtcManager(
             FirebaseSyncManager.listenCallSdp(callId, "offer") { offerSdp ->
                 handleRemoteOffer(offerSdp)
             }
+        }
+    }
+
+    private fun drainPendingIceCandidates() {
+        synchronized(pendingIceCandidates) {
+            isRemoteDescriptionSet = true
+            for (candidate in pendingIceCandidates) {
+                peerConnection?.addIceCandidate(candidate)
+            }
+            pendingIceCandidates.clear()
         }
     }
 
@@ -242,17 +306,28 @@ class WebRtcManager(
 
                 // Caller listens for Answer
                 FirebaseSyncManager.listenCallSdp(callId, "answer") { answerSdp ->
+                    if (isAnswerProcessed) return@listenCallSdp
+                    isAnswerProcessed = true
                     val remoteDesc = SessionDescription(SessionDescription.Type.ANSWER, answerSdp)
-                    peerConnection?.setRemoteDescription(SdpObserverAdapter(), remoteDesc)
+                    peerConnection?.setRemoteDescription(object : SdpObserverAdapter() {
+                        override fun onSetSuccess() {
+                            Log.i(TAG, "Caller setRemoteDescription (Answer) successful")
+                            drainPendingIceCandidates()
+                        }
+                    }, remoteDesc)
                 }
             }
         }, sdpConstraints)
     }
 
     private fun handleRemoteOffer(offerSdp: String) {
+        if (isOfferProcessed) return
+        isOfferProcessed = true
         val remoteDesc = SessionDescription(SessionDescription.Type.OFFER, offerSdp)
         peerConnection?.setRemoteDescription(object : SdpObserverAdapter() {
             override fun onSetSuccess() {
+                Log.i(TAG, "Callee setRemoteDescription (Offer) successful")
+                drainPendingIceCandidates()
                 createAndSendAnswer()
             }
         }, remoteDesc)

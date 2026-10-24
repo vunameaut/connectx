@@ -352,12 +352,12 @@ class CallActivity : AppCompatActivity() {
                 runOnUiThread {
                     remoteVideoView.visibility = View.VISIBLE
                     callHeaderLayout.visibility = View.GONE
+                    tvCallStatus.text = "Đang truyền hình ảnh HD"
                 }
             }
             onCallDisconnected = {
                 runOnUiThread {
-                    Toast.makeText(this@CallActivity, "Kết nối cuộc gọi bị ngắt", Toast.LENGTH_SHORT).show()
-                    endCall()
+                    tvCallStatus.text = "Tín hiệu mạng không ổn định..."
                 }
             }
         }
