@@ -1,6 +1,8 @@
 package com.vhn.connectx
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -9,9 +11,11 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -100,6 +104,29 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var btnClearTestData: MaterialButton
     private lateinit var btnLogout: MaterialButton
     private lateinit var btnCheckUpdate: MaterialButton
+    private lateinit var btnGrantPermissions: MaterialButton
+
+    private val appPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ -> }
+
+    private fun checkStartupPermissions() {
+        val needed = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.RECORD_AUDIO)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.CAMERA)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                needed.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        if (needed.isNotEmpty()) {
+            appPermissionLauncher.launch(needed.toTypedArray())
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -117,6 +144,9 @@ class HomeActivity : AppCompatActivity() {
         initViews()
         setupBottomNav()
         refreshData()
+
+        // Xin quyền tự động 1 chạm khi mở app
+        checkStartupPermissions()
 
         // Check for updates
         UpdateManager.checkForUpdate(this, isManual = false)
@@ -316,6 +346,7 @@ class HomeActivity : AppCompatActivity() {
         btnClearTestData = findViewById(R.id.btnClearTestData)
         btnLogout = findViewById(R.id.btnLogout)
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
+        btnGrantPermissions = findViewById(R.id.btnGrantPermissions)
 
         tvProfileDisplayName.text = user.displayName
         tvProfileEmail.text = user.email
@@ -324,6 +355,15 @@ class HomeActivity : AppCompatActivity() {
 
         updateThemeLabel()
         updateServerHostLabel()
+
+        btnGrantPermissions.setOnClickListener {
+            val needed = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                needed.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            appPermissionLauncher.launch(needed.toTypedArray())
+            Toast.makeText(this, "Đang mở bảng cấp quyền hệ thống...", Toast.LENGTH_SHORT).show()
+        }
 
         btnToggleTheme.setOnClickListener {
             showThemeSelectionDialog()

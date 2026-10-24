@@ -1,9 +1,11 @@
 package com.vhn.connectx
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.media.Ringtone
 import android.media.RingtoneManager
@@ -16,7 +18,9 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.connectx.screencapture.ScreenCaptureModule
 import com.connectx.screencapture.ScreenCaptureService
 import com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -112,6 +116,39 @@ class CallActivity : AppCompatActivity() {
         }
     }
 
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val micGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+        val cameraGranted = permissions[Manifest.permission.CAMERA] ?: false
+        if (micGranted) {
+            Log.i("CallActivity", "Microphone permission granted")
+        } else {
+            Toast.makeText(this, "Cần cấp quyền Micro để đàm thoại", Toast.LENGTH_SHORT).show()
+        }
+        if (isVideoEnabled && !cameraGranted) {
+            Toast.makeText(this, "Cần cấp quyền Camera để bật hình ảnh", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun checkAndRequestCallPermissions() {
+        val permissionsNeeded = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.RECORD_AUDIO)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.CAMERA)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        if (permissionsNeeded.isNotEmpty()) {
+            permissionLauncher.launch(permissionsNeeded.toTypedArray())
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -164,6 +201,9 @@ class CallActivity : AppCompatActivity() {
         } else {
             registerReceiver(captureReceiver, filter)
         }
+
+        // Auto request microphone and camera permissions on 1st tap
+        checkAndRequestCallPermissions()
 
         // Setup Call Flow
         if (isIncoming) {

@@ -662,6 +662,22 @@
                     android:layout_width="match_parent"
                     android:layout_height="16dp" />
 
+                <!-- 1-Tap Grant Permissions Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGrantPermissions"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:text="Cấp quyền Micro &amp; Camera (1 chạm)"
+                    android:textColor="@color/white"
+                    app:icon="@drawable/ic_mic"
+                    app:iconTint="@color/white"
+                    app:cornerRadius="26dp"
+                    app:backgroundTint="@color/call_green" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="12dp" />
+
                 <!-- Check Update Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCheckUpdate"
