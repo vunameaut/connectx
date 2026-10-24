@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "410097638269",
+    "project_id": "message-62553",
+    "storage_bucket": "message-62553.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:410097638269:android:d93b3198b83732b44a8a14",
+        "android_client_info": {
+          "package_name": "com.vhn.connectx"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "410097638269-ua7t7s1pv29ofemvbg2ora4m6pofggp3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYCfQb97FKnn0oFZTQaroy3ff7aS03FUE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "410097638269-ua7t7s1pv29ofemvbg2ora4m6pofggp3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
