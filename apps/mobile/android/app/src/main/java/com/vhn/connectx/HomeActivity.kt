@@ -148,6 +148,9 @@ class HomeActivity : AppCompatActivity() {
         // Xin quyền tự động 1 chạm khi mở app
         checkStartupPermissions()
 
+        // Bắt đầu CallService chạy nền để nhận cuộc gọi ngay cả khi thoát app
+        com.vhn.connectx.net.CallService.start(this)
+
         // Check for updates
         UpdateManager.checkForUpdate(this, isManual = false)
     }
@@ -171,8 +174,7 @@ class HomeActivity : AppCompatActivity() {
         friendRequestListeners = null
         conversationListeners.forEach { it.remove() }
         conversationListeners.clear()
-        incomingCallListener?.remove()
-        incomingCallListener = null
+        // Không hủy incoming call của CallService
     }
 
     private fun startListeningIncomingCalls() {

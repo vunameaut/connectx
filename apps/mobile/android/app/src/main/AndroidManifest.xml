@@ -7,10 +7,14 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Mandatory Permissions for Android 14+ (API 34/35) MediaProjection Foreground Service -->
+    <!-- Mandatory Permissions for Android 14+ (API 34/35) Foreground Services -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
 
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -55,6 +59,13 @@
         <activity
             android:name=".MainActivity"
             android:exported="false" />
+
+        <!-- Background Call Service (Listens for incoming calls 24/7 like Zalo/Messenger) -->
+        <service
+            android:name="com.vhn.connectx.net.CallService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall" />
 
         <!-- Screen Capture Foreground Service (Complies with Android 14+ FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION) -->
         <service
