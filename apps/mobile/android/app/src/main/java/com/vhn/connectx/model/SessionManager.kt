@@ -12,11 +12,31 @@ class SessionManager(context: Context) {
         private const val KEY_USER_ID = "user_id"
         private const val KEY_DISPLAY_NAME = "display_name"
         private const val KEY_EMAIL = "email"
+        private const val KEY_FIREBASE_TOKEN = "firebase_token"
+        private const val KEY_SUPABASE_TOKEN = "supabase_token"
+        private const val KEY_SUPABASE_PROFILE_ID = "supabase_profile_id"
+        private const val KEY_API_BASE_URL = "api_base_url"
     }
 
     var isLoggedIn: Boolean
         get() = prefs.getBoolean(KEY_IS_LOGGED_IN, false)
         set(value) = prefs.edit().putBoolean(KEY_IS_LOGGED_IN, value).apply()
+
+    var firebaseToken: String?
+        get() = prefs.getString(KEY_FIREBASE_TOKEN, null)
+        set(value) = prefs.edit().putString(KEY_FIREBASE_TOKEN, value).apply()
+
+    var supabaseToken: String?
+        get() = prefs.getString(KEY_SUPABASE_TOKEN, null)
+        set(value) = prefs.edit().putString(KEY_SUPABASE_TOKEN, value).apply()
+
+    var supabaseProfileId: String?
+        get() = prefs.getString(KEY_SUPABASE_PROFILE_ID, null)
+        set(value) = prefs.edit().putString(KEY_SUPABASE_PROFILE_ID, value).apply()
+
+    var apiBaseUrl: String
+        get() = prefs.getString(KEY_API_BASE_URL, "http://10.0.2.2:4000") ?: "http://10.0.2.2:4000"
+        set(value) = prefs.edit().putString(KEY_API_BASE_URL, value).apply()
 
     var currentUser: User
         get() {

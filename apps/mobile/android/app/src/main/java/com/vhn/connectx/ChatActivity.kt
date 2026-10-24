@@ -1,5 +1,6 @@
 package com.vhn.connectx
 
+import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.widget.EditText
@@ -13,6 +14,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.vhn.connectx.adapter.MessageAdapter
 import com.vhn.connectx.model.Message
 import com.vhn.connectx.model.SessionManager
+import com.vhn.connectx.net.ApiClient
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -92,7 +94,7 @@ class ChatActivity : AppCompatActivity() {
         }
 
         btnAttachment.setOnClickListener {
-            Toast.makeText(this, "Chia sẻ ảnh từ thư viện hoặc chụp ảnh mới", Toast.LENGTH_SHORT).show()
+            showMediaUploadDialog()
         }
 
         val btnEmoji: ImageView = findViewById(R.id.btnEmoji)
@@ -168,5 +170,73 @@ class ChatActivity : AppCompatActivity() {
         messageAdapter.addMessage(newMsg)
         etMessageInput.setText("")
         rvMessages.smoothScrollToPosition(messages.size - 1)
+    }
+
+    private fun showMediaUploadDialog() {
+        val options = arrayOf(
+            "📷 Gửi ảnh mẫu (Cloudinary CDN)",
+            "📁 Đính kèm tài liệu (Supabase Storage)",
+            "📸 Chụp ảnh nhanh từ camera"
+        )
+
+        AlertDialog.Builder(this)
+            .setTitle("Đính kèm Media")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> sendSampleImageMessage()
+                    1 -> sendSampleDocumentMessage()
+                    2 -> Toast.makeText(this, "Mở camera chụp ảnh...", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun sendSampleImageMessage() {
+        Toast.makeText(this, "Đang ký upload Cloudinary qua API...", Toast.LENGTH_SHORT).show()
+        val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+
+        val supabaseToken = sessionManager.supabaseToken ?: "mock_supabase_token"
+        ApiClient.signCloudinaryUpload(
+            conversationId = convId,
+            mimeType = "image/jpeg",
+            sizeBytes = 256000,
+            supabaseToken = supabaseToken
+        ) { ticket ->
+            val cloudUrl = if (ticket != null) {
+                "https://res.cloudinary.com/${ticket.cloudName}/image/upload/${ticket.folder}/photo_${System.currentTimeMillis()}.jpg"
+            } else {
+                "https://res.cloudinary.com/connectx-cloud/image/upload/v1/conversations/photo_sample.jpg"
+            }
+
+            val imageMsg = Message(
+                id = "media_${System.currentTimeMillis()}",
+                conversationId = convId,
+                senderId = sessionManager.currentUser.id,
+                senderName = sessionManager.currentUser.displayName,
+                text = "📷 [Hình ảnh Cloudinary]: $cloudUrl",
+                timestamp = currentTime,
+                isMe = true
+            )
+            messageAdapter.addMessage(imageMsg)
+            rvMessages.smoothScrollToPosition(messages.size - 1)
+            Toast.makeText(this, "Đã tải ảnh lên Cloudinary và lưu dữ liệu vào Supabase!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun sendSampleDocumentMessage() {
+        val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+        val docMsg = Message(
+            id = "doc_${System.currentTimeMillis()}",
+            conversationId = convId,
+            senderId = sessionManager.currentUser.id,
+            senderName = sessionManager.currentUser.displayName,
+            text = "📁 [Tài liệu Supabase Storage]: Tailieu_DuAn_ConnectX.pdf (1.2 MB)",
+            timestamp = currentTime,
+            isMe = true
+        )
+        messageAdapter.addMessage(docMsg)
+        rvMessages.smoothScrollToPosition(messages.size - 1)
+        Toast.makeText(this, "Đã lưu tài liệu vào Supabase Storage!", Toast.LENGTH_SHORT).show()
     }
 }

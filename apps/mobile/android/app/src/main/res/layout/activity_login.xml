@@ -11,26 +11,16 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center_horizontal"
-        android:paddingHorizontal="28dp"
-        android:paddingVertical="40dp">
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="32dp">
 
-        <!-- Top Spacing -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="20dp" />
-
-        <!-- Logo Container with Ambient Glow -->
-        <FrameLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
-
-            <ImageView
-                android:id="@+id/ivLogo"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:src="@drawable/ic_connectx_logo"
-                android:contentDescription="ConnectX Brand Logo" />
-        </FrameLayout>
+        <!-- Logo Container -->
+        <ImageView
+            android:id="@+id/ivLogo"
+            android:layout_width="84dp"
+            android:layout_height="84dp"
+            android:src="@drawable/ic_connectx_logo"
+            android:contentDescription="ConnectX Brand Logo" />
 
         <!-- Brand Name -->
         <TextView
@@ -38,121 +28,27 @@
             android:layout_height="wrap_content"
             android:text="ConnectX"
             android:textColor="@color/text_primary"
-            android:textSize="34sp"
+            android:textSize="30sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif-black"
-            android:letterSpacing="0.02"
-            android:layout_marginTop="16dp" />
-
-        <!-- Badge -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="KẾT NỐI KHÔNG GIỚI HẠN"
-            android:textColor="@color/colorPrimaryLight"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.1"
-            android:background="@drawable/bg_badge"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="12dp" />
 
         <!-- Slogan -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Nhắn tin real-time • Gọi thoại &amp; Video WebRTC • Chia sẻ màn hình chuẩn Zalo"
-            android:textColor="@color/text_secondary"
-            android:textSize="14sp"
+            android:text="Quản lý bởi Firebase • Lưu trữ Supabase • Media Cloudinary"
+            android:textColor="@color/colorPrimaryLight"
+            android:textSize="12sp"
             android:gravity="center"
-            android:lineSpacingExtra="4dp"
-            android:layout_marginTop="12dp" />
+            android:layout_marginTop="4dp" />
 
-        <!-- Feature Highlights Card -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/bg_card_rounded"
-            android:padding="16dp"
-            android:layout_marginTop="28dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_chat"
-                    app:tint="@color/colorPrimaryLight" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Nhắn tin tức thì &amp; Bong bóng chat Zalo"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp"
-                    android:layout_marginStart="10dp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="10dp">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_videocall"
-                    app:tint="@color/status_online" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Gọi Video WebRTC HD &amp; TURN Metered"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp"
-                    android:layout_marginStart="10dp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="10dp">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_screenshare"
-                    app:tint="@color/colorIndigo" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Chia sẻ toàn màn hình Android 14+ bảo mật"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp"
-                    android:layout_marginStart="10dp" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:minHeight="28dp" />
-
-        <!-- Google Sign-In Button -->
+        <!-- Primary Action: Google Sign-In -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnGoogleSignIn"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="54dp"
+            android:layout_marginTop="24dp"
             android:text="@string/login_with_google"
             android:textColor="#0F172A"
             android:textSize="15sp"
@@ -161,38 +57,180 @@
             app:iconGravity="textStart"
             app:iconPadding="14dp"
             app:iconTint="@null"
-            app:cornerRadius="28dp"
+            app:cornerRadius="27dp"
             app:backgroundTint="#FFFFFF"
             app:elevation="4dp" />
 
-        <!-- Guest / Demo Mode Button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnGuestSignIn"
+        <!-- Divider with OR text -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginTop="14dp"
-            android:text="@string/login_as_guest"
-            android:textColor="@color/text_primary"
-            android:textSize="15sp"
-            app:cornerRadius="28dp"
-            app:backgroundTint="@color/bg_card"
-            app:strokeColor="@color/border_subtle"
-            app:strokeWidth="1dp" />
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="16dp">
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"
+                android:background="@color/divider" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="HOẶC ĐĂNG NHẬP BẰNG TÀI KHOẢN FIREBASE"
+                android:textColor="@color/text_muted"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.05"
+                android:layout_marginHorizontal="10dp" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"
+                android:background="@color/divider" />
+        </LinearLayout>
+
+        <!-- Firebase Email & Password Form Container -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card_rounded"
+            android:padding="16dp">
+
+            <EditText
+                android:id="@+id/etEmail"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_input_box"
+                android:hint="Email (vd: user@connectx.app)"
+                android:textColorHint="@color/text_hint"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:paddingHorizontal="16dp"
+                android:inputType="textEmailAddress" />
+
+            <EditText
+                android:id="@+id/etPassword"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_input_box"
+                android:hint="Mật khẩu (ít nhất 6 ký tự)"
+                android:textColorHint="@color/text_hint"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:paddingHorizontal="16dp"
+                android:inputType="textPassword" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="12dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnEmailSignIn"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:text="Đăng nhập"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="23dp"
+                    app:backgroundTint="@color/colorPrimary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRegisterEmail"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:text="Đăng ký mới"
+                    android:textSize="13sp"
+                    app:cornerRadius="23dp"
+                    app:backgroundTint="@color/bg_card_secondary"
+                    app:strokeColor="@color/border_subtle"
+                    app:strokeWidth="1dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Fast 1-Touch Test Accounts -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="VÀO NHANH TÀI KHOẢN MẪU (1-TOUCH)"
+            android:textColor="@color/text_muted"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.05"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="10dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnQuickAlice"
+                android:layout_width="0dp"
+                android:layout_height="42dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="Alice C."
+                android:textSize="12sp"
+                app:cornerRadius="21dp"
+                app:backgroundTint="@color/bg_card"
+                app:strokeColor="@color/border_subtle"
+                app:strokeWidth="1dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnQuickBob"
+                android:layout_width="0dp"
+                android:layout_height="42dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="4dp"
+                android:text="Bob M."
+                android:textSize="12sp"
+                app:cornerRadius="21dp"
+                app:backgroundTint="@color/bg_card"
+                app:strokeColor="@color/border_subtle"
+                app:strokeWidth="1dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnGuestSignIn"
+                android:layout_width="0dp"
+                android:layout_height="42dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="Khách"
+                android:textSize="12sp"
+                app:cornerRadius="21dp"
+                app:backgroundTint="@color/bg_card"
+                app:strokeColor="@color/border_subtle"
+                app:strokeWidth="1dp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tvLoginStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/text_muted"
+            android:textColor="@color/text_secondary"
             android:textSize="12sp"
             android:layout_marginTop="20dp"
-            android:text="Mã hóa đầu cuối • Xác thực Google Play Services" />
+            android:gravity="center"
+            android:text="Sẵn sàng kết nối Firebase, Supabase &amp; Cloudinary" />
 
         <ProgressBar
             android:id="@+id/pbLoginLoading"
             android:layout_width="32dp"
             android:layout_height="32dp"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="14dp"
             android:indeterminateTint="@color/colorPrimaryLight"
             android:visibility="gone" />
 
