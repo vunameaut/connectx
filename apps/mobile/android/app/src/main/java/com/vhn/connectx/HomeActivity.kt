@@ -237,12 +237,15 @@ class HomeActivity : AppCompatActivity() {
                 try {
                     val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                     nm.cancel(1002)
+                    nm.cancelAll()
+                    androidx.core.app.NotificationManagerCompat.from(this).cancel(1002)
+                    androidx.core.app.NotificationManagerCompat.from(this).cancelAll()
                 } catch (e: Exception) {
                     android.util.Log.w("HomeActivity", "Cancel incoming-call notification failed: ${e.message}")
                 }
             }
         ) { callId, callerName, callerEmail, isVideo ->
-            if (callId == lastHandledCallId) return@listenIncomingCall
+            if (callId == lastHandledCallId && CallActivity.isCallActive) return@listenIncomingCall
             lastHandledCallId = callId
             showIncomingCall(callId, callerName, callerEmail, isVideo)
         }
@@ -285,7 +288,7 @@ class HomeActivity : AppCompatActivity() {
                     .build()
 
                 val channel = android.app.NotificationChannel(
-                    "connectx_incoming_calls",
+                    "connectx_incoming_calls_v2",
                     "ConnectX Cuộc gọi đến",
                     android.app.NotificationManager.IMPORTANCE_HIGH
                 ).apply {
@@ -298,7 +301,7 @@ class HomeActivity : AppCompatActivity() {
                 manager.createNotificationChannel(channel)
             }
 
-            val notification = androidx.core.app.NotificationCompat.Builder(this, "connectx_incoming_calls")
+            val notification = androidx.core.app.NotificationCompat.Builder(this, "connectx_incoming_calls_v2")
                 .setContentTitle(if (isVideo) "Cuộc gọi Video đến" else "Cuộc gọi Thoại đến")
                 .setContentText("$callerName đang gọi cho bạn...")
                 .setSmallIcon(R.drawable.ic_calls)

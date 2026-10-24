@@ -443,13 +443,31 @@ object FirebaseSyncManager {
         isVideo: Boolean,
         onComplete: (Boolean) -> Unit
     ) {
+        val cleanCallerEmail = callerEmail.trim().lowercase()
+        val cleanCalleeEmail = calleeEmail.trim().lowercase()
+
+        // Huỷ các cuộc gọi cũ chưa hoàn tất giữa 2 người để tránh xung đột
+        firestore.collection("active_calls")
+            .whereEqualTo("calleeEmail", cleanCalleeEmail)
+            .whereEqualTo("callerEmail", cleanCallerEmail)
+            .whereEqualTo("status", "RINGING")
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                for (doc in querySnapshot.documents) {
+                    if (doc.id != callId) {
+                        doc.reference.update("status", "CANCELLED")
+                    }
+                }
+            }
+
         val callData = hashMapOf(
             "id" to callId,
-            "callerEmail" to callerEmail.trim().lowercase(),
+            "callerEmail" to cleanCallerEmail,
             "callerName" to callerName,
-            "calleeEmail" to calleeEmail.trim().lowercase(),
+            "calleeEmail" to cleanCalleeEmail,
             "isVideo" to isVideo,
-            "status" to "RINGING", // "RINGING", "ACCEPTED", "DECLINED", "ENDED"
+            "status" to "RINGING", // "RINGING", "ACCEPTED", "DECLINED", "ENDED", "MISSED", "UNREACHABLE", "CANCELLED"
+            "isRinging" to false, // Sẽ chuyển sang true khi máy người nhận thực sự nhận lệnh và bắt đầu đổ chuông
             "createdAt" to System.currentTimeMillis()
         )
 
@@ -461,7 +479,23 @@ object FirebaseSyncManager {
     }
 
     /**
+     * Xác nhận máy người nhận đã bắt đầu đổ chuông.
+     */
+    fun markCallRinging(callId: String) {
+        if (callId.isBlank()) return
+        firestore.collection("active_calls")
+            .document(callId)
+            .update("isRinging", true)
+            .addOnFailureListener {
+                firestore.collection("active_calls")
+                    .document(callId)
+                    .set(mapOf("isRinging" to true), com.google.firebase.firestore.SetOptions.merge())
+            }
+    }
+
+    /**
      * Lắng nghe cuộc gọi đến (Incoming Call) cho tài khoản hiện tại.
+     * Tương thích hoàn toàn giữa máy thật và máy ảo, không bị chặn do lệch đồng hồ.
      */
     fun listenIncomingCall(
         myEmail: String,
@@ -482,19 +516,14 @@ object FirebaseSyncManager {
                         onNoRinging?.invoke()
                         return@addSnapshotListener
                     }
-                    for (doc in snapshot.documents) {
-                        val callId = doc.getString("id") ?: doc.id
-                        val callerName = doc.getString("callerName") ?: "Bạn bè"
-                        val callerEmail = doc.getString("callerEmail") ?: ""
-                        val isVideo = doc.getBoolean("isVideo") ?: true
-                        val createdAt = doc.getLong("createdAt") ?: 0L
-
-                        // Cho phép chênh lệch thời gian máy ảo và máy thật lên tới 3 phút (hoặc cuộc gọi mới tạo)
-                        val timeDiff = Math.abs(System.currentTimeMillis() - createdAt)
-                        if (createdAt == 0L || timeDiff < 180000) {
-                            onIncomingCall(callId, callerName, callerEmail, isVideo)
-                            break
-                        }
+                    // Lấy cuộc gọi mới nhất đang đổ chuông
+                    val newest = snapshot.documents.maxByOrNull { it.getLong("createdAt") ?: 0L }
+                    if (newest != null) {
+                        val callId = newest.getString("id") ?: newest.id
+                        val callerName = newest.getString("callerName") ?: "Bạn bè"
+                        val callerEmail = newest.getString("callerEmail") ?: ""
+                        val isVideo = newest.getBoolean("isVideo") ?: true
+                        onIncomingCall(callId, callerName, callerEmail, isVideo)
                     }
                 }
         } catch (e: Exception) {
@@ -503,7 +532,7 @@ object FirebaseSyncManager {
     }
 
     /**
-     * Cập nhật trạng thái cuộc gọi (ACCEPTED, DECLINED, ENDED, MISSED).
+     * Cập nhật trạng thái cuộc gọi (ACCEPTED, DECLINED, ENDED, MISSED, UNREACHABLE).
      */
     fun updateCallStatus(callId: String, status: String, onComplete: ((Boolean) -> Unit)? = null) {
         if (callId.isBlank()) return
@@ -519,7 +548,7 @@ object FirebaseSyncManager {
      */
     fun listenCallStatus(
         callId: String,
-        onStatusChange: (status: String) -> Unit
+        onStatusChange: (status: String, isRinging: Boolean) -> Unit
     ): ListenerRegistration? {
         if (callId.isBlank()) return null
         return try {
@@ -528,8 +557,9 @@ object FirebaseSyncManager {
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
                     val status = snapshot.getString("status") ?: ""
+                    val isRinging = snapshot.getBoolean("isRinging") ?: false
                     if (status.isNotBlank()) {
-                        onStatusChange(status)
+                        onStatusChange(status, isRinging)
                     }
                 }
         } catch (e: Exception) {

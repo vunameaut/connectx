@@ -166,8 +166,23 @@ class WebRtcManager(
         return null
     }
 
-    private fun hasTurnConfigured(): Boolean =
-        BuildConfig.TURN_URLS.isNotBlank() && BuildConfig.TURN_USERNAME.isNotBlank() && BuildConfig.TURN_CREDENTIAL.isNotBlank()
+    private fun getTurnUrls(): List<String> {
+        val configUrls = BuildConfig.TURN_URLS.trim()
+        val raw = if (configUrls.isNotBlank()) configUrls else "turn:global.relay.metered.ca:80,turn:global.relay.metered.ca:80?transport=tcp,turn:global.relay.metered.ca:443,turns:global.relay.metered.ca:443?transport=tcp"
+        return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
+    private fun getTurnUsername(): String {
+        val u = BuildConfig.TURN_USERNAME.trim()
+        return if (u.isNotBlank()) u else "dbc395ca293461527dec624b"
+    }
+
+    private fun getTurnCredential(): String {
+        val c = BuildConfig.TURN_CREDENTIAL.trim()
+        return if (c.isNotBlank()) c else "EbFVNsUyyCAOzA+y"
+    }
+
+    private fun hasTurnConfigured(): Boolean = true
 
     private fun buildIceServers(): List<PeerConnection.IceServer> {
         val servers = mutableListOf(
@@ -175,18 +190,16 @@ class WebRtcManager(
             PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
             PeerConnection.IceServer.builder("stun:stun.cloudflare.com:3478").createIceServer()
         )
-        if (hasTurnConfigured()) {
-            val urls = BuildConfig.TURN_URLS.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            servers.add(
-                PeerConnection.IceServer.builder(urls)
-                    .setUsername(BuildConfig.TURN_USERNAME)
-                    .setPassword(BuildConfig.TURN_CREDENTIAL)
-                    .createIceServer()
-            )
-            Log.i(TAG, "TURN configured: ${urls.size} url(s)")
-        } else {
-            Log.w(TAG, "NO TURN SERVER CONFIGURED - calls across different networks / mobile data will have no media. See apps/mobile/android/turn.properties.example")
-        }
+        val urls = getTurnUrls()
+        val username = getTurnUsername()
+        val password = getTurnCredential()
+        servers.add(
+            PeerConnection.IceServer.builder(urls)
+                .setUsername(username)
+                .setPassword(password)
+                .createIceServer()
+        )
+        Log.i(TAG, "WebRTC configured with ${urls.size} TURN relay server(s) for P2P/emulator traversal")
         return servers
     }
 
@@ -239,7 +252,7 @@ class WebRtcManager(
                 if (track is VideoTrack) {
                     remoteVideoTrack = track
                     remoteVideoTrack?.addSink(remoteRenderer)
-                    // The UI is told when the first real frame is rendered (RendererEvents above)
+                    onRemoteVideoTrackReady?.invoke(track)
                 } else if (track is AudioTrack) {
                     remoteAudioTrack = track
                     remoteAudioTrack?.setEnabled(true)
@@ -252,6 +265,7 @@ class WebRtcManager(
                         val track = stream.videoTracks[0]
                         remoteVideoTrack = track
                         remoteVideoTrack?.addSink(remoteRenderer)
+                        onRemoteVideoTrackReady?.invoke(track)
                     }
                     if (stream.audioTracks.isNotEmpty() && remoteAudioTrack == null) {
                         remoteAudioTrack = stream.audioTracks[0]
@@ -427,9 +441,18 @@ class WebRtcManager(
         screenVideoTrack = peerConnectionFactory?.createVideoTrack("connectx_screen_track", screenVideoSource)
         screenVideoTrack?.setEnabled(true)
 
-        // Replace video track with screen track if already transmitting
+        // Replace video track with screen track if sender exists, or add it
         val videoSender = peerConnection?.senders?.find { it.track()?.kind() == "video" }
-        videoSender?.setTrack(screenVideoTrack, false)
+            ?: peerConnection?.transceivers?.find { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.sender
+
+        if (videoSender != null) {
+            videoSender.setTrack(screenVideoTrack, false)
+        } else {
+            peerConnection?.addTrack(screenVideoTrack, listOf("connectx_stream"))
+            if (isCaller) {
+                createAndSendOffer()
+            }
+        }
     }
 
     /**
@@ -445,6 +468,7 @@ class WebRtcManager(
 
             // Restore camera track
             val videoSender = peerConnection?.senders?.find { it.track()?.kind() == "video" }
+                ?: peerConnection?.transceivers?.find { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.sender
             videoSender?.setTrack(localVideoTrack, false)
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping screen share: ${e.message}")

@@ -95,13 +95,19 @@ class CallActivity : AppCompatActivity() {
         }
     }
 
+    private val connectingTimeoutHandler = Handler(Looper.getMainLooper())
     private val ringingTimeoutHandler = Handler(Looper.getMainLooper())
-    private val CALL_TIMEOUT_MS = 35000L // 35 seconds ringing timeout
+    private val CONNECTING_TIMEOUT_MS = 15000L // 15 seconds without ringing -> Unreachable
+    private val RINGING_TIMEOUT_MS = 30000L    // 30 seconds ringing without answer -> Missed call
+    private var isRingingReceived = false
 
     private fun dismissNotification() {
         try {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             nm.cancel(1002)
+            nm.cancelAll()
+            androidx.core.app.NotificationManagerCompat.from(this).cancel(1002)
+            androidx.core.app.NotificationManagerCompat.from(this).cancelAll()
         } catch (e: Exception) {
             // Ignore
         }
@@ -169,12 +175,21 @@ class CallActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         dismissNotification()
+        Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 300)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        dismissNotification()
+        Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 300)
+        Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 1000)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         isCallActive = true
         dismissNotification()
+        Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 300)
 
         // Wake screen and show over lockscreen like Zalo / WhatsApp
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -189,6 +204,12 @@ class CallActivity : AppCompatActivity() {
             )
         }
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Request dismissing keyguard if locked
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            keyguardManager?.requestDismissKeyguard(this, null)
+        }
 
         setContentView(R.layout.activity_call)
 
@@ -283,8 +304,8 @@ class CallActivity : AppCompatActivity() {
             finish()
             return
         }
-        tvCallStatus.text = "Đang gọi..."
-        tvCallTimer.text = "Đang kết nối..."
+        tvCallStatus.text = "Đang kết nối..."
+        tvCallTimer.text = "Đang gửi tín hiệu..."
         callControlsBar.visibility = View.VISIBLE
         layoutIncomingCallActions.visibility = View.GONE
 
@@ -313,7 +334,22 @@ class CallActivity : AppCompatActivity() {
             ) {}
         }
 
-        // Set 35s timeout if callee doesn't answer
+        // 1. Timeout "không đổ chuông thì tắt": Chờ tối đa 15s nếu người nhận không có mạng / không đổ chuông
+        connectingTimeoutHandler.removeCallbacksAndMessages(null)
+        connectingTimeoutHandler.postDelayed({
+            if (!isRingingReceived && !isCallAccepted && !isFinishing && !isDestroyed) {
+                tvCallStatus.text = "Thuê bao hiện không thể liên lạc"
+                FirebaseSyncManager.updateCallStatus(callId, "UNREACHABLE")
+                Toast.makeText(this, "Thuê bao hiện không có phản hồi tín hiệu (Không đổ chuông)", Toast.LENGTH_SHORT).show()
+                Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
+            }
+        }, CONNECTING_TIMEOUT_MS)
+
+        // Listen for recipient response
+        listenCallStatusUpdates()
+    }
+
+    private fun startRingingTimeout() {
         ringingTimeoutHandler.removeCallbacksAndMessages(null)
         ringingTimeoutHandler.postDelayed({
             if (!isCallAccepted && !isFinishing && !isDestroyed) {
@@ -322,10 +358,7 @@ class CallActivity : AppCompatActivity() {
                 Toast.makeText(this, "Không có phản hồi từ đối phương (Hết thời gian chờ)", Toast.LENGTH_SHORT).show()
                 Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
             }
-        }, CALL_TIMEOUT_MS)
-
-        // Listen for recipient response
-        listenCallStatusUpdates()
+        }, RINGING_TIMEOUT_MS)
     }
 
     private fun setupIncomingCallMode() {
@@ -333,6 +366,9 @@ class CallActivity : AppCompatActivity() {
         tvCallTimer.text = "Đang đổ chuông..."
         callControlsBar.visibility = View.GONE
         layoutIncomingCallActions.visibility = View.VISIBLE
+
+        // Báo cho phía người gọi biết máy mình đã nhận tín hiệu và đang đổ chuông
+        FirebaseSyncManager.markCallRinging(callId)
 
         // Play standard incoming ringtone
         try {
@@ -343,21 +379,23 @@ class CallActivity : AppCompatActivity() {
             e.printStackTrace()
         }
 
-        // Set 35s ringing timeout for callee
+        // 2. Timeout "đổ chuông bao lâu không nghe thì tắt": 30s đổ chuông không nghe thì tự tắt
         ringingTimeoutHandler.removeCallbacksAndMessages(null)
         ringingTimeoutHandler.postDelayed({
             if (!isCallAccepted && !isFinishing && !isDestroyed) {
                 ringtone?.stop()
                 dismissNotification()
                 tvCallStatus.text = "Cuộc gọi nhỡ"
+                FirebaseSyncManager.updateCallStatus(callId, "MISSED")
                 Toast.makeText(this, "Cuộc gọi nhỡ từ $contactName", Toast.LENGTH_SHORT).show()
                 Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
             }
-        }, CALL_TIMEOUT_MS)
+        }, RINGING_TIMEOUT_MS)
 
         btnAcceptCall.setOnClickListener {
             ringtone?.stop()
             dismissNotification()
+            connectingTimeoutHandler.removeCallbacksAndMessages(null)
             ringingTimeoutHandler.removeCallbacksAndMessages(null)
             isCallAccepted = true
             FirebaseSyncManager.updateCallStatus(callId, "ACCEPTED")
@@ -367,6 +405,7 @@ class CallActivity : AppCompatActivity() {
         btnDeclineCall.setOnClickListener {
             ringtone?.stop()
             dismissNotification()
+            connectingTimeoutHandler.removeCallbacksAndMessages(null)
             ringingTimeoutHandler.removeCallbacksAndMessages(null)
             FirebaseSyncManager.updateCallStatus(callId, "DECLINED")
             Toast.makeText(this, "Đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
@@ -379,12 +418,23 @@ class CallActivity : AppCompatActivity() {
 
     private fun listenCallStatusUpdates() {
         callStatusListener?.remove()
-        callStatusListener = FirebaseSyncManager.listenCallStatus(callId) { status ->
+        callStatusListener = FirebaseSyncManager.listenCallStatus(callId) { status, isRinging ->
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+
+                // Khi đối phương bắt đầu đổ chuông thực tế
+                if (isRinging && !isRingingReceived && !isCallAccepted && !isIncoming) {
+                    isRingingReceived = true
+                    connectingTimeoutHandler.removeCallbacksAndMessages(null)
+                    tvCallStatus.text = "Đang đổ chuông..."
+                    tvCallTimer.text = "Đang đổ chuông..."
+                    startRingingTimeout()
+                }
+
                 when (status) {
                     "ACCEPTED" -> {
                         if (!isCallAccepted) {
+                            connectingTimeoutHandler.removeCallbacksAndMessages(null)
                             ringingTimeoutHandler.removeCallbacksAndMessages(null)
                             onCallConnected()
                         }
@@ -392,6 +442,7 @@ class CallActivity : AppCompatActivity() {
                     "DECLINED" -> {
                         ringtone?.stop()
                         dismissNotification()
+                        connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
                         tvCallStatus.text = "Đối phương bận máy"
                         Toast.makeText(this, "Đối phương đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
@@ -400,18 +451,29 @@ class CallActivity : AppCompatActivity() {
                     "MISSED" -> {
                         ringtone?.stop()
                         dismissNotification()
+                        connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
                         tvCallStatus.text = "Người nhận không trả lời"
                         Toast.makeText(this, "Không có phản hồi từ đối phương", Toast.LENGTH_SHORT).show()
                         Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
                     }
-                    "ENDED" -> {
+                    "UNREACHABLE" -> {
                         ringtone?.stop()
                         dismissNotification()
+                        connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
-                        tvCallStatus.text = "Cuộc gọi đã kết thúc"
+                        tvCallStatus.text = "Thuê bao không thể liên lạc"
+                        Toast.makeText(this, "Thuê bao hiện không thể liên lạc được (Không có kết nối)", Toast.LENGTH_SHORT).show()
+                        Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1800)
+                    }
+                    "CANCELLED", "ENDED" -> {
+                        ringtone?.stop()
+                        dismissNotification()
+                        connectingTimeoutHandler.removeCallbacksAndMessages(null)
+                        ringingTimeoutHandler.removeCallbacksAndMessages(null)
+                        tvCallStatus.text = if (status == "CANCELLED") "Người gọi đã huỷ" else "Cuộc gọi đã kết thúc"
                         timerHandler.removeCallbacks(timerRunnable)
-                        Toast.makeText(this, "Cuộc gọi đã kết thúc", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, if (status == "CANCELLED") "Cuộc gọi đã bị huỷ" else "Cuộc gọi đã kết thúc", Toast.LENGTH_SHORT).show()
                         Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1000)
                     }
                 }
@@ -423,6 +485,7 @@ class CallActivity : AppCompatActivity() {
         isCallAccepted = true
         ringtone?.stop()
         dismissNotification()
+        connectingTimeoutHandler.removeCallbacksAndMessages(null)
         ringingTimeoutHandler.removeCallbacksAndMessages(null)
         callControlsBar.visibility = View.VISIBLE
         layoutIncomingCallActions.visibility = View.GONE
@@ -574,6 +637,7 @@ class CallActivity : AppCompatActivity() {
     private fun endCall() {
         ringtone?.stop()
         dismissNotification()
+        connectingTimeoutHandler.removeCallbacksAndMessages(null)
         ringingTimeoutHandler.removeCallbacksAndMessages(null)
         if (isScreenSharing) {
             webRtcManager?.stopScreenShare()
@@ -592,6 +656,7 @@ class CallActivity : AppCompatActivity() {
         isCallActive = false
         ringtone?.stop()
         dismissNotification()
+        connectingTimeoutHandler.removeCallbacksAndMessages(null)
         ringingTimeoutHandler.removeCallbacksAndMessages(null)
         callStatusListener?.remove()
         timerHandler.removeCallbacks(timerRunnable)

@@ -110,32 +110,12 @@ class ScreenCaptureService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
 
-            // Now obtain MediaProjection with the user-consented token
-            mediaProjection = projectionManager?.getMediaProjection(resultCode, data)
-            if (mediaProjection == null) {
-                Log.e(TAG, "Failed to obtain MediaProjection instance")
-                broadcastEvent(BROADCAST_SCREEN_CAPTURE_ERROR, "FAILED_TO_GET_PROJECTION")
-                stopSelf()
-                return
-            }
-
-            mediaProjection?.registerCallback(projectionCallback, null)
+            // Android 14+ strictly requires a running foreground service of type mediaProjection
+            // BEFORE MediaProjection is obtained by WebRTC's ScreenCapturerAndroid.
+            // We do NOT call getMediaProjection() here because the consent token is single-use.
+            // ScreenCapturerAndroid in WebRtcManager will consume this valid token to stream frames.
             isCapturing = true
-
-            // Set up display metrics for virtual display (1080p target or native scaled)
-            val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val metrics = DisplayMetrics()
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.getRealMetrics(metrics)
-
-            val width = 1080
-            val height = 1920
-            val dpi = metrics.densityDpi
-
-            // Note: VirtualDisplay surface will be attached to WebRTC VideoCapturer SurfaceTextureHelper
-            // virtualDisplay = mediaProjection?.createVirtualDisplay(...)
-
-            Log.i(TAG, "MediaProjection successfully initialized and capturing")
+            Log.i(TAG, "Foreground service running with mediaProjection type. Ready for ScreenCapturerAndroid.")
             broadcastEvent(BROADCAST_SCREEN_CAPTURE_STARTED, "SUCCESS")
 
         } catch (e: SecurityException) {
