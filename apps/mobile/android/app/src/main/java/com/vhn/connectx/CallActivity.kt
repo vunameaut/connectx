@@ -100,6 +100,7 @@ class CallActivity : AppCompatActivity() {
     private val CONNECTING_TIMEOUT_MS = 15000L // 15 seconds without ringing -> Unreachable
     private val RINGING_TIMEOUT_MS = 30000L    // 30 seconds ringing without answer -> Missed call
     private var isRingingReceived = false
+    private var pendingScreenCaptureData: Intent? = null
 
     private fun dismissNotification() {
         try {
@@ -122,15 +123,30 @@ class CallActivity : AppCompatActivity() {
                 ScreenCaptureService.BROADCAST_SCREEN_CAPTURE_STARTED -> {
                     isScreenSharing = true
                     updateScreenShareUI(true, "ĐANG CHIA SẺ MÀN HÌNH")
-                    Toast.makeText(this@CallActivity, "Đang chia sẻ màn hình", Toast.LENGTH_SHORT).show()
+                    val captureData = pendingScreenCaptureData
+                    if (captureData != null) {
+                        try {
+                            webRtcManager?.startScreenShare(captureData)
+                            Toast.makeText(this@CallActivity, "Đang phát trực tiếp màn hình qua WebRTC", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Log.e("CallActivity", "Error starting WebRTC screen share: ${e.message}", e)
+                            Toast.makeText(this@CallActivity, "Lỗi kết nối màn hình: ${e.message}", Toast.LENGTH_LONG).show()
+                            isScreenSharing = false
+                            updateScreenShareUI(false, "")
+                        }
+                    }
                 }
                 ScreenCaptureService.BROADCAST_SCREEN_CAPTURE_STOPPED -> {
                     isScreenSharing = false
+                    pendingScreenCaptureData = null
+                    webRtcManager?.stopScreenShare()
                     updateScreenShareUI(false, "")
                     Toast.makeText(this@CallActivity, "Đã dừng chia sẻ màn hình", Toast.LENGTH_SHORT).show()
                 }
                 ScreenCaptureService.BROADCAST_SCREEN_CAPTURE_ERROR -> {
                     isScreenSharing = false
+                    pendingScreenCaptureData = null
+                    webRtcManager?.stopScreenShare()
                     updateScreenShareUI(false, "")
                     Toast.makeText(this@CallActivity, "Lỗi chia sẻ màn hình: $message", Toast.LENGTH_LONG).show()
                 }
@@ -289,7 +305,7 @@ class CallActivity : AppCompatActivity() {
             localVideoView.setEnableHardwareScaler(true)
             localVideoView.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FIT)
             remoteVideoView.setEnableHardwareScaler(true)
-            remoteVideoView.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+            remoteVideoView.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FIT)
         } catch (e: Exception) {
             Log.w("CallActivity", "Error setting video surface attributes: ${e.message}")
         }
@@ -598,8 +614,11 @@ class CallActivity : AppCompatActivity() {
                     }
                 }
             } else {
+                isScreenSharing = false
+                pendingScreenCaptureData = null
                 webRtcManager?.stopScreenShare()
                 screenCaptureModule.stopCapture()
+                updateScreenShareUI(false, "")
             }
         }
 
@@ -612,11 +631,8 @@ class CallActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         screenCaptureModule.onActivityResult(requestCode, resultCode, data)
         if (requestCode == ScreenCaptureModule.REQUEST_CODE_MEDIA_PROJECTION && resultCode == RESULT_OK && data != null) {
-            try {
-                webRtcManager?.startScreenShare(resultCode, data)
-            } catch (e: Exception) {
-                Log.e("CallActivity", "Error starting WebRTC screen share: ${e.message}")
-            }
+            // Lưu intent data, đợi Foreground Service kích hoạt xong (BROADCAST_SCREEN_CAPTURE_STARTED) mới start WebRTC ScreenCapturer
+            pendingScreenCaptureData = data
         }
     }
 
@@ -628,12 +644,14 @@ class CallActivity : AppCompatActivity() {
             tvScreenShareLabel.setTextColor(Color.parseColor("#EF4444"))
             btnToggleScreenShare.backgroundTintList = getColorStateList(R.color.call_red)
             tvCallStatus.text = "Đang truyền tải màn hình qua WebRTC"
+            cardLocalVideo.visibility = View.GONE
         } else {
             layoutScreenShareBanner.visibility = View.GONE
             tvScreenShareLabel.text = "Chia sẻ"
             tvScreenShareLabel.setTextColor(Color.parseColor("#38BDF8"))
             btnToggleScreenShare.backgroundTintList = getColorStateList(R.color.colorPrimary)
             tvCallStatus.text = if (isVideoEnabled) "Cuộc gọi Video WebRTC (TURN Connected)" else "Cuộc gọi Thoại WebRTC"
+            cardLocalVideo.visibility = if (isVideoEnabled) View.VISIBLE else View.GONE
         }
     }
 

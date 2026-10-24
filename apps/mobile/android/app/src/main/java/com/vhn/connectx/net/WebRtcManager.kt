@@ -47,6 +47,7 @@ class WebRtcManager(
     private var screenCapturer: VideoCapturer? = null
     private var screenVideoSource: VideoSource? = null
     private var screenVideoTrack: VideoTrack? = null
+    private var localVideoSender: RtpSender? = null
 
     private var remoteAudioTrack: AudioTrack? = null
     private var remoteVideoTrack: VideoTrack? = null
@@ -370,7 +371,7 @@ class WebRtcManager(
             peerConnection?.addTrack(it, mediaStreamLabels)
         }
         localVideoTrack?.let {
-            peerConnection?.addTrack(it, mediaStreamLabels)
+            localVideoSender = peerConnection?.addTrack(it, mediaStreamLabels)
         }
 
         // Setup candidate listener from partner
@@ -479,29 +480,53 @@ class WebRtcManager(
     /**
      * Bắt đầu Screen Share qua WebRTC
      */
-    fun startScreenShare(resultCode: Int, data: Intent) {
-        val permissionIntentCallback = object : MediaProjection.Callback() {}
+    fun startScreenShare(data: Intent) {
+        val permissionIntentCallback = object : MediaProjection.Callback() {
+            override fun onStop() {
+                Log.w(TAG, "MediaProjection stopped by system")
+            }
+        }
         screenCapturer = ScreenCapturerAndroid(data, permissionIntentCallback)
 
         val helper = SurfaceTextureHelper.create("ScreenCaptureHelper", eglContext)
         screenVideoSource = peerConnectionFactory?.createVideoSource(true)
         screenCapturer?.initialize(helper, context, screenVideoSource?.capturerObserver)
-        screenCapturer?.startCapture(1280, 720, 20)
+
+        // Tính toán độ phân giải màn hình tương thích bộ mã hoá H264/VP8 (kích thước chẵn)
+        val metrics = context.resources.displayMetrics
+        val width = metrics.widthPixels
+        val height = metrics.heightPixels
+        val maxDim = maxOf(width, height)
+        val scale = if (maxDim > 1280) 1280.0f / maxDim else 1.0f
+        val targetWidth = ((width * scale).toInt() / 2) * 2
+        val targetHeight = ((height * scale).toInt() / 2) * 2
+
+        Log.i(TAG, "Starting ScreenCapturerAndroid at ${targetWidth}x${targetHeight}@20fps")
+        screenCapturer?.startCapture(targetWidth, targetHeight, 20)
 
         screenVideoTrack = peerConnectionFactory?.createVideoTrack("connectx_screen_track", screenVideoSource)
         screenVideoTrack?.setEnabled(true)
 
-        // Replace video track with screen track if sender exists, or add it
-        val videoSender = peerConnection?.senders?.find { it.track()?.kind() == "video" }
+        // Tạm dừng Camera để nhường toàn bộ băng thông và tránh đè hình ảnh
+        try {
+            cameraCapturer?.stopCapture()
+            Log.i(TAG, "Paused camera capture during screen share")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error pausing camera during screen share: ${e.message}")
+        }
+
+        // Chuyển video track trên sender từ Camera sang Screen
+        val videoSender = localVideoSender
+            ?: peerConnection?.senders?.find { it.track()?.kind() == "video" }
             ?: peerConnection?.transceivers?.find { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.sender
 
         if (videoSender != null) {
-            videoSender.setTrack(screenVideoTrack, false)
+            val replaced = videoSender.setTrack(screenVideoTrack, false)
+            Log.i(TAG, "Switched video sender track to screen track: success=$replaced")
         } else {
-            peerConnection?.addTrack(screenVideoTrack, listOf("connectx_stream"))
-            if (isCaller) {
-                createAndSendOffer()
-            }
+            Log.w(TAG, "Video sender not found, adding screen track as new track")
+            localVideoSender = peerConnection?.addTrack(screenVideoTrack, listOf("connectx_stream"))
+            createAndSendOffer()
         }
     }
 
@@ -516,10 +541,21 @@ class WebRtcManager(
             screenVideoSource?.dispose()
             screenVideoSource = null
 
-            // Restore camera track
-            val videoSender = peerConnection?.senders?.find { it.track()?.kind() == "video" }
+            // Khôi phục Camera track trên video sender
+            val videoSender = localVideoSender
+                ?: peerConnection?.senders?.find { it.track()?.kind() == "video" }
                 ?: peerConnection?.transceivers?.find { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }?.sender
-            videoSender?.setTrack(localVideoTrack, false)
+
+            val restored = videoSender?.setTrack(localVideoTrack, false)
+            Log.i(TAG, "Restored video sender track to camera track: success=$restored")
+
+            // Bật lại Camera capture
+            try {
+                cameraCapturer?.startCapture(640, 480, 24)
+                Log.i(TAG, "Resumed camera capture after screen share")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error resuming camera after screen share: ${e.message}")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping screen share: ${e.message}")
         }

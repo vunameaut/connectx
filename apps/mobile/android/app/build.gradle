@@ -20,8 +20,8 @@ android {
         applicationId "com.vhn.connectx"
         minSdk 26
         targetSdk 34
-        versionCode 19
-        versionName "1.0.18"
+        versionCode 20
+        versionName "1.0.19"
         buildConfigField "String", "TURN_URLS", "\"${turnValue('turn.urls')}\""
         buildConfigField "String", "TURN_USERNAME", "\"${turnValue('turn.username')}\""
         buildConfigField "String", "TURN_CREDENTIAL", "\"${turnValue('turn.credential')}\""
