@@ -512,12 +512,20 @@ object FirebaseSyncManager {
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) return@addSnapshotListener
                     if (snapshot.isEmpty) {
-                        // Không còn cuộc gọi nào đang đổ chuông (đã nghe / từ chối / nhỡ / người gọi huỷ)
                         onNoRinging?.invoke()
                         return@addSnapshotListener
                     }
-                    // Lấy cuộc gọi mới nhất đang đổ chuông
-                    val newest = snapshot.documents.maxByOrNull { it.getLong("createdAt") ?: 0L }
+                    val now = System.currentTimeMillis()
+                    // Lọc bỏ các cuộc gọi cũ hơn 45s để tránh chuông ma hoặc xung đột cuộc gọi cũ
+                    val validDocs = snapshot.documents.filter { doc ->
+                        val createdAt = doc.getLong("createdAt") ?: 0L
+                        (now - createdAt) < 45000L
+                    }
+                    if (validDocs.isEmpty()) {
+                        onNoRinging?.invoke()
+                        return@addSnapshotListener
+                    }
+                    val newest = validDocs.maxByOrNull { it.getLong("createdAt") ?: 0L }
                     if (newest != null) {
                         val callId = newest.getString("id") ?: newest.id
                         val callerName = newest.getString("callerName") ?: "Bạn bè"

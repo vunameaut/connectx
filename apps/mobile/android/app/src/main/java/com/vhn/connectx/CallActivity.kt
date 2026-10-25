@@ -450,6 +450,11 @@ class CallActivity : AppCompatActivity() {
             finish()
         }
 
+        // Tự động nhận cuộc gọi nếu người dùng đã bấm nút "Trả lời" ngay trên thông báo banner
+        if (intent.getBooleanExtra("EXTRA_AUTO_ACCEPT", false)) {
+            btnAcceptCall.performClick()
+        }
+
         // Listen if caller hangs up before answering
         listenCallStatusUpdates()
     }

@@ -140,6 +140,8 @@ class CallBackgroundService : Service() {
             ACTION_STOP_RINGING -> {
                 stopRingtoneAndVibration()
                 dismissCallNotification()
+                lastHandledCallId = ""
+                currentActiveCallId = null
                 return START_STICKY
             }
             ACTION_DECLINE_CALL -> {
@@ -149,6 +151,8 @@ class CallBackgroundService : Service() {
                 }
                 stopRingtoneAndVibration()
                 dismissCallNotification()
+                lastHandledCallId = ""
+                currentActiveCallId = null
                 return START_STICKY
             }
             else -> {
@@ -272,6 +276,8 @@ class CallBackgroundService : Service() {
             onNoRinging = {
                 stopRingtoneAndVibration()
                 dismissCallNotification()
+                lastHandledCallId = ""
+                currentActiveCallId = null
             }
         ) { callId, callerName, callerEmail, isVideo ->
             if (CallActivity.isCallActive) {
@@ -290,6 +296,8 @@ class CallBackgroundService : Service() {
     fun triggerIncomingCall(callId: String, callerName: String, callerEmail: String, isVideo: Boolean) {
         acquireWakeLock()
         startRingtoneAndVibration()
+        // Báo ngay lập tức cho người gọi biết máy mình đã nhận và đang đổ chuông (hủy 15s timeout của người gọi)
+        FirebaseSyncManager.markCallRinging(callId)
         showFullScreenCallNotification(callId, callerName, callerEmail, isVideo)
         launchCallActivity(callId, callerName, callerEmail, isVideo)
     }
@@ -375,6 +383,7 @@ class CallBackgroundService : Service() {
             putExtra("EXTRA_CONTACT_EMAIL", callerEmail)
             putExtra("EXTRA_IS_VIDEO", isVideo)
             putExtra("EXTRA_IS_INCOMING", true)
+            putExtra("EXTRA_AUTO_ACCEPT", false)
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -386,6 +395,27 @@ class CallBackgroundService : Service() {
             this,
             callId.hashCode(),
             callIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Intent khi bấm nút "Trả lời" trên banner -> Tự động nhấc máy ngay lập tức
+        val answerIntent = Intent(this, CallActivity::class.java).apply {
+            putExtra("EXTRA_CALL_ID", callId)
+            putExtra("EXTRA_CONTACT_NAME", callerName)
+            putExtra("EXTRA_CONTACT_EMAIL", callerEmail)
+            putExtra("EXTRA_IS_VIDEO", isVideo)
+            putExtra("EXTRA_IS_INCOMING", true)
+            putExtra("EXTRA_AUTO_ACCEPT", true)
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            )
+        }
+        val answerPendingIntent = PendingIntent.getActivity(
+            this,
+            callId.hashCode() + 2,
+            answerIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -403,7 +433,20 @@ class CallBackgroundService : Service() {
         val title = if (isVideo) "Cuộc gọi Video đến" else "Cuộc gọi Thoại đến"
         val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
 
+        val callerPerson = androidx.core.app.Person.Builder()
+            .setName(callerName)
+            .setKey(callerEmail)
+            .setImportant(true)
+            .build()
+
+        val callStyle = NotificationCompat.CallStyle.forIncomingCall(
+            callerPerson,
+            declinePendingIntent,
+            answerPendingIntent
+        )
+
         val notification = NotificationCompat.Builder(this, CHANNEL_CALL_ID)
+            .setStyle(callStyle)
             .setContentTitle(title)
             .setContentText("$callerName đang gọi cho bạn...")
             .setSmallIcon(if (isVideo) R.drawable.ic_videocall else R.drawable.ic_calls)
@@ -417,7 +460,7 @@ class CallBackgroundService : Service() {
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setContentIntent(fullScreenPendingIntent)
             .addAction(R.drawable.ic_call_end, "Từ chối", declinePendingIntent)
-            .addAction(if (isVideo) R.drawable.ic_videocall else R.drawable.ic_calls, "Trả lời", fullScreenPendingIntent)
+            .addAction(if (isVideo) R.drawable.ic_videocall else R.drawable.ic_calls, "Trả lời", answerPendingIntent)
             .build()
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -443,6 +486,14 @@ class CallBackgroundService : Service() {
                     Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 )
             }
+
+            val pi = PendingIntent.getActivity(
+                this,
+                callId.hashCode() + 10,
+                callIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 val options = android.app.ActivityOptions.makeBasic()
                 try {
@@ -454,9 +505,17 @@ class CallBackgroundService : Service() {
                 } catch (e: Exception) {
                     // Ignore
                 }
-                startActivity(callIntent, options.toBundle())
+                try {
+                    pi.send(this, 0, null, null, null, null, options.toBundle())
+                } catch (e: Exception) {
+                    startActivity(callIntent, options.toBundle())
+                }
             } else {
-                startActivity(callIntent)
+                try {
+                    pi.send()
+                } catch (e: Exception) {
+                    startActivity(callIntent)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Direct launch CallActivity failed: ${e.message}")
