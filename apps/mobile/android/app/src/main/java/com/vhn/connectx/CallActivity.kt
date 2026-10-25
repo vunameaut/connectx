@@ -833,6 +833,18 @@ class CallActivity : AppCompatActivity() {
         }
     }
 
+    override fun finish() {
+        isCallActive = false
+        super.finish()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (isFinishing) {
+            isCallActive = false
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         isCallActive = false

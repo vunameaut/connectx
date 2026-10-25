@@ -161,6 +161,19 @@ class HomeActivity : AppCompatActivity() {
             }
         }
 
+        // Hỗ trợ Realme UI / ColorOS / Android: kiểm tra quyền hiển thị trên ứng dụng khác để mở cuộc gọi toàn màn hình từ nền
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(this)) {
+            try {
+                val intent = Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivity(intent)
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+
         // Hỗ trợ Realme UI / ColorOS: kiểm tra miễn trừ tối ưu hóa pin để không bị ngắt cuộc gọi nền
         try {
             val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
@@ -270,6 +283,12 @@ class HomeActivity : AppCompatActivity() {
         // Giữ incomingCallListener để vẫn nhận cuộc gọi khi thu nhỏ app
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        // Giống Zalo, Telegram, WhatsApp: Khi ở màn hình chính, bấm Back đưa app xuống chạy ngầm (moveTaskToBack) chứ không destroy
+        moveTaskToBack(true)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         incomingCallListener?.remove()
@@ -277,6 +296,12 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun startListeningIncomingCalls() {
+        // Nếu CallBackgroundService đã và đang chạy, dịch vụ nền đã quản lý toàn bộ chuông và cuộc gọi đến 24/7
+        if (CallBackgroundService.isServiceRunning) {
+            android.util.Log.i("HomeActivity", "CallBackgroundService is active, delegating call listener to background service")
+            return
+        }
+
         val myEmail = sessionManager.currentUser.email
         if (myEmail.isBlank()) return
 
@@ -287,11 +312,8 @@ class HomeActivity : AppCompatActivity() {
                 try {
                     val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                     nm.cancel(1002)
-                    nm.cancelAll()
-                    androidx.core.app.NotificationManagerCompat.from(this).cancel(1002)
-                    androidx.core.app.NotificationManagerCompat.from(this).cancelAll()
                 } catch (e: Exception) {
-                    android.util.Log.w("HomeActivity", "Cancel incoming-call notification failed: ${e.message}")
+                    // Ignore
                 }
             }
         ) { callId, callerName, callerEmail, isVideo ->
@@ -1291,17 +1313,20 @@ class HomeActivity : AppCompatActivity() {
 
     private fun showRealmeBatteryGuideDialog() {
         val guide = """
-            🔔 CẤU HÌNH REALME / ANDROID ĐỂ ĐỔ CHUÔNG KHI TẮT MÀN HÌNH:
+            🔔 CẤU HÌNH REALME / ANDROID ĐỂ ĐỔ CHUÔNG KHI THOÁT HOẶC TẮT MÀN HÌNH:
 
-            Realme GT 5 (Realme UI / ColorOS) có cơ chế tiết kiệm pin rất mạnh, tự động đóng băng ứng dụng khi tắt màn hình hoặc tắt app. Để chuông nổ to và hiện cuộc gọi đến như Zalo / Messenger:
+            Realme GT Neo 5 (Realme UI 7 / ColorOS) có cơ chế tiết kiệm pin rất mạnh, tự động đóng băng ứng dụng khi thoát app. Để chuông nổ to và hiện giao diện cuộc gọi đến toàn màn hình (như Zalo / Messenger):
 
-            1️⃣ Cho phép Tự khởi chạy (Auto-launch):
+            1️⃣ Cho phép Hiển thị trên ứng dụng khác (Cửa sổ nổi):
+               Cài đặt > Ứng dụng > Quyền đặc biệt > Hiển thị trên ứng dụng khác > ConnectX > BẬT.
+
+            2️⃣ Cho phép Tự khởi chạy (Auto-launch):
                Cài đặt > Ứng dụng > Quản lý ứng dụng > ConnectX > Bật "Tự khởi động" & "Cho phép khởi động liên kết".
 
-            2️⃣ Cho phép hoạt động dưới nền:
+            3️⃣ Cho phép hoạt động dưới nền:
                Pin > Quản lý pin ứng dụng > ConnectX > Chọn "Cho phép hoạt động dưới nền" (Không tối ưu hóa pin).
 
-            3️⃣ Cho phép hiển thị trên màn hình khóa:
+            4️⃣ Cho phép hiển thị trên màn hình khóa:
                Cài đặt > Thông báo và thanh trạng thái > Quản lý thông báo > ConnectX > Bật "Thông báo biểu ngữ" & "Thông báo trên màn hình khóa".
         """.trimIndent()
 

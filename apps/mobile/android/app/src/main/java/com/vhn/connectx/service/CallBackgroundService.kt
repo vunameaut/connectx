@@ -34,7 +34,7 @@ class CallBackgroundService : Service() {
     companion object {
         private const val TAG = "CallBackgroundService"
         const val CHANNEL_SERVICE_ID = "connectx_call_service_channel"
-        const val CHANNEL_CALL_ID = "connectx_incoming_calls_v2"
+        const val CHANNEL_CALL_ID = "connectx_incoming_calls_v3"
         const val NOTIFICATION_SERVICE_ID = 1001
         const val NOTIFICATION_CALL_ID = 1002
 
@@ -90,6 +90,7 @@ class CallBackgroundService : Service() {
     private var currentActiveCallId: String? = null
     private var ringtone: Ringtone? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var serviceWakeLock: PowerManager.WakeLock? = null
     private var vibrator: Vibrator? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -97,8 +98,28 @@ class CallBackgroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         isServiceRunning = true
+        acquireServiceWakeLock()
         initVibrator()
         createNotificationChannels()
+    }
+
+    private fun acquireServiceWakeLock() {
+        try {
+            if (serviceWakeLock == null) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                serviceWakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "ConnectX:CallBackgroundServiceWakeLock"
+                ).apply {
+                    setReferenceCounted(false)
+                }
+            }
+            if (serviceWakeLock?.isHeld == false) {
+                serviceWakeLock?.acquire()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to acquire service wake lock: ${e.message}")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -217,9 +238,23 @@ class CallBackgroundService : Service() {
             .build()
 
         try {
-            startForeground(NOTIFICATION_SERVICE_ID, notification)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                var fgsType = 0
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    fgsType = fgsType or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                }
+                fgsType = fgsType or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                startForeground(NOTIFICATION_SERVICE_ID, notification, fgsType)
+            } else {
+                startForeground(NOTIFICATION_SERVICE_ID, notification)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "startForeground error: ${e.message}")
+            try {
+                startForeground(NOTIFICATION_SERVICE_ID, notification)
+            } catch (e2: Exception) {
+                Log.e(TAG, "startForeground fallback error: ${e2.message}")
+            }
         }
     }
 
@@ -408,7 +443,21 @@ class CallBackgroundService : Service() {
                     Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 )
             }
-            startActivity(callIntent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val options = android.app.ActivityOptions.makeBasic()
+                try {
+                    val method = android.app.ActivityOptions::class.java.getMethod(
+                        "setPendingIntentBackgroundActivityStartMode",
+                        Int::class.javaPrimitiveType
+                    )
+                    method.invoke(options, 1) // 1 = MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                } catch (e: Exception) {
+                    // Ignore
+                }
+                startActivity(callIntent, options.toBundle())
+            } else {
+                startActivity(callIntent)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Direct launch CallActivity failed: ${e.message}")
         }
@@ -430,5 +479,12 @@ class CallBackgroundService : Service() {
         dismissCallNotification()
         incomingCallListener?.remove()
         incomingCallListener = null
+        try {
+            if (serviceWakeLock?.isHeld == true) {
+                serviceWakeLock?.release()
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
     }
 }

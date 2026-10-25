@@ -283,7 +283,11 @@ object UpdateManager {
         httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 mainHandler.post {
-                    progressDialog.dismiss()
+                    try {
+                        if (!activity.isFinishing && !activity.isDestroyed && progressDialog.isShowing) {
+                            progressDialog.dismiss()
+                        }
+                    } catch (ex: Exception) {}
                     showDownloadErrorDialog(activity, url, fileName, e.message ?: "Mất kết nối mạng")
                 }
             }
@@ -291,7 +295,11 @@ object UpdateManager {
             override fun onResponse(call: Call, response: Response) {
                 if (!response.isSuccessful) {
                     mainHandler.post {
-                        progressDialog.dismiss()
+                        try {
+                            if (!activity.isFinishing && !activity.isDestroyed && progressDialog.isShowing) {
+                                progressDialog.dismiss()
+                            }
+                        } catch (ex: Exception) {}
                         showDownloadErrorDialog(activity, url, fileName, "Mã lỗi HTTP: ${response.code}")
                     }
                     return
@@ -300,7 +308,11 @@ object UpdateManager {
                 val body = response.body
                 if (body == null) {
                     mainHandler.post {
-                        progressDialog.dismiss()
+                        try {
+                            if (!activity.isFinishing && !activity.isDestroyed && progressDialog.isShowing) {
+                                progressDialog.dismiss()
+                            }
+                        } catch (ex: Exception) {}
                         showDownloadErrorDialog(activity, url, fileName, "Dữ liệu trả về trống")
                     }
                     return
@@ -327,12 +339,20 @@ object UpdateManager {
                     }
 
                     mainHandler.post {
-                        progressDialog.dismiss()
+                        try {
+                            if (!activity.isFinishing && !activity.isDestroyed && progressDialog.isShowing) {
+                                progressDialog.dismiss()
+                            }
+                        } catch (ex: Exception) {}
                         launchPackageInstaller(activity, destinationFile)
                     }
                 } catch (e: Exception) {
                     mainHandler.post {
-                        progressDialog.dismiss()
+                        try {
+                            if (!activity.isFinishing && !activity.isDestroyed && progressDialog.isShowing) {
+                                progressDialog.dismiss()
+                            }
+                        } catch (ex: Exception) {}
                         showDownloadErrorDialog(activity, url, fileName, e.message ?: "Lỗi ghi file")
                     }
                 }
