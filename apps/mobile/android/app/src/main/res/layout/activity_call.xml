@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_root">
+    android:background="#060912">
 
     <!-- Video / Screen Share View Placeholder -->
     <FrameLayout
@@ -17,7 +17,7 @@
             android:id="@+id/remoteVideoView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:visibility="visible" />
+            android:visibility="gone" />
 
         <!-- Local Camera PIP Preview -->
         <androidx.cardview.widget.CardView
@@ -66,6 +66,78 @@
                 android:textStyle="bold" />
         </LinearLayout>
     </FrameLayout>
+
+    <!-- Dedicated Minimalist Fallback Layout for PiP Mode (Voice calls or before remote video connects) -->
+    <LinearLayout
+        android:id="@+id/layoutPipFallback"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#0B0F19"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="8dp"
+        android:visibility="gone">
+
+        <!-- Compact Avatar -->
+        <FrameLayout
+            android:layout_width="56dp"
+            android:layout_height="56dp">
+
+            <View
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/bg_story_ring" />
+
+            <TextView
+                android:id="@+id/tvPipAvatar"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_avatar_circle"
+                android:text="U"
+                android:textColor="@color/white"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:gravity="center" />
+        </FrameLayout>
+
+        <!-- Compact Contact Name -->
+        <TextView
+            android:id="@+id/tvPipContactName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bạn bè"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:layout_marginTop="8dp" />
+
+        <!-- Live Call Timer with Online Pulse Indicator -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="4dp">
+
+            <View
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:background="@drawable/bg_status_online" />
+
+            <TextView
+                android:id="@+id/tvPipTimer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="#38BDF8"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+    </LinearLayout>
 
     <!-- Minimize / Back to PiP Button (Như Messenger / Zalo) -->
     <ImageButton
@@ -136,7 +208,7 @@
                 android:layout_width="106dp"
                 android:layout_height="106dp"
                 android:layout_gravity="center"
-                android:background="@drawable/bg_card"
+                android:background="@drawable/bg_avatar_circle"
                 android:text="B"
                 android:textColor="@color/white"
                 android:textSize="44sp"
@@ -149,7 +221,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Bạn bè ConnectX"
-            android:textColor="@color/text_primary"
+            android:textColor="@color/white"
             android:textSize="26sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif-medium"
@@ -169,7 +241,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="00:00"
-            android:textColor="@color/text_secondary"
+            android:textColor="#94A3B8"
             android:textSize="15sp"
             android:fontFamily="sans-serif-light"
             android:layout_marginTop="6dp" />

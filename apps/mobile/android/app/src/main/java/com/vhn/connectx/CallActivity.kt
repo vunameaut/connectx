@@ -52,6 +52,13 @@ class CallActivity : AppCompatActivity() {
     private lateinit var layoutScreenShareBanner: LinearLayout
     private lateinit var tvScreenShareBannerText: TextView
 
+    // Dedicated PiP Views
+    private lateinit var layoutPipFallback: LinearLayout
+    private lateinit var tvPipAvatar: TextView
+    private lateinit var tvPipContactName: TextView
+    private lateinit var tvPipTimer: TextView
+    private var hasRemoteVideo = false
+
     private lateinit var callControlsBar: LinearLayout
     private lateinit var btnToggleMic: FloatingActionButton
     private lateinit var tvMicLabel: TextView
@@ -98,7 +105,11 @@ class CallActivity : AppCompatActivity() {
             callSeconds++
             val minutes = callSeconds / 60
             val seconds = callSeconds % 60
-            tvCallTimer.text = String.format("%02d:%02d", minutes, seconds)
+            val timeStr = String.format("%02d:%02d", minutes, seconds)
+            tvCallTimer.text = timeStr
+            if (::tvPipTimer.isInitialized) {
+                tvPipTimer.text = timeStr
+            }
             timerHandler.postDelayed(this, 1000)
         }
     }
@@ -209,6 +220,7 @@ class CallActivity : AppCompatActivity() {
         com.vhn.connectx.service.CallBackgroundService.stopRinging(this)
         Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 300)
         Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 1000)
+        updatePictureInPictureParams()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -313,6 +325,12 @@ class CallActivity : AppCompatActivity() {
         cardLocalVideo = findViewById(R.id.cardLocalVideo)
         callHeaderLayout = findViewById(R.id.callHeaderLayout)
 
+        // PiP Fallback Views
+        layoutPipFallback = findViewById(R.id.layoutPipFallback)
+        tvPipAvatar = findViewById(R.id.tvPipAvatar)
+        tvPipContactName = findViewById(R.id.tvPipContactName)
+        tvPipTimer = findViewById(R.id.tvPipTimer)
+
         // Essential: Set Z-Order Media Overlay for overlapping local preview
         try {
             localVideoView.setZOrderMediaOverlay(true)
@@ -326,6 +344,15 @@ class CallActivity : AppCompatActivity() {
 
         tvCallContactName.text = contactName
         tvCallAvatar.text = contactName.ifBlank { "U" }.take(1).uppercase()
+        tvPipContactName.text = contactName
+        tvPipAvatar.text = contactName.ifBlank { "U" }.take(1).uppercase()
+        tvPipTimer.text = "00:00"
+
+        // SurfaceViewRenderer must start GONE so it does not render a black surface overlay
+        remoteVideoView.visibility = View.GONE
+        if (!isVideoEnabled) {
+            cardLocalVideo.visibility = View.GONE
+        }
 
         btnMinimizeCall = findViewById(R.id.btnMinimizeCall)
         layoutCallQualityBadge = findViewById(R.id.layoutCallQualityBadge)
@@ -333,6 +360,7 @@ class CallActivity : AppCompatActivity() {
             enterPipMode()
         }
         setupDraggableLocalVideo()
+        updatePictureInPictureParams()
     }
 
     private fun setupOutgoingCallMode() {
@@ -345,6 +373,7 @@ class CallActivity : AppCompatActivity() {
         tvCallTimer.text = "Đang gửi tín hiệu..."
         callControlsBar.visibility = View.VISIBLE
         layoutIncomingCallActions.visibility = View.GONE
+        updatePictureInPictureParams()
 
         // Start local camera preview immediately so caller can see themselves while waiting
         if (isVideoEnabled) {
@@ -403,6 +432,7 @@ class CallActivity : AppCompatActivity() {
         tvCallTimer.text = "Đang đổ chuông..."
         callControlsBar.visibility = View.GONE
         layoutIncomingCallActions.visibility = View.VISIBLE
+        updatePictureInPictureParams()
 
         // Báo cho phía người gọi biết máy mình đã nhận tín hiệu và đang đổ chuông
         FirebaseSyncManager.markCallRinging(callId)
@@ -550,8 +580,11 @@ class CallActivity : AppCompatActivity() {
         // Start call timer when answered (nhấc máy thì đếm giờ)
         callSeconds = 0
         tvCallTimer.text = "00:00"
+        tvPipTimer.text = "00:00"
         timerHandler.removeCallbacks(timerRunnable)
         timerHandler.postDelayed(timerRunnable, 1000)
+
+        updatePictureInPictureParams()
 
         // Initialize WebRTC Engine
         setupWebRtcMedia()
@@ -565,9 +598,19 @@ class CallActivity : AppCompatActivity() {
         ).apply {
             onRemoteVideoTrackReady = {
                 runOnUiThread {
-                    remoteVideoView.visibility = View.VISIBLE
-                    callHeaderLayout.visibility = View.GONE
+                    hasRemoteVideo = true
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
+                        remoteVideoView.visibility = View.VISIBLE
+                        layoutPipFallback.visibility = View.GONE
+                        callHeaderLayout.visibility = View.GONE
+                        remoteVideoView.requestLayout()
+                    } else {
+                        remoteVideoView.visibility = View.VISIBLE
+                        layoutPipFallback.visibility = View.GONE
+                        callHeaderLayout.visibility = View.GONE
+                    }
                     tvCallStatus.text = "Đang truyền hình ảnh"
+                    updatePictureInPictureParams()
                 }
             }
             onIceConnected = {
@@ -630,6 +673,7 @@ class CallActivity : AppCompatActivity() {
             isVideoEnabled = !isVideoEnabled
             webRtcManager?.toggleCamera(isVideoEnabled)
             cardLocalVideo.visibility = if (isVideoEnabled) View.VISIBLE else View.GONE
+            updatePictureInPictureParams()
             if (isVideoEnabled) {
                 tvVideoLabel.text = "Camera"
                 btnToggleVideo.backgroundTintList = getColorStateList(R.color.bg_card_secondary)
@@ -770,13 +814,61 @@ class CallActivity : AppCompatActivity() {
         }
     }
 
+    fun updatePictureInPictureParams() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val aspectRatio = Rational(9, 16)
+                val builder = PictureInPictureParams.Builder()
+                    .setAspectRatio(aspectRatio)
+
+                val sourceRect = android.graphics.Rect()
+                if (hasRemoteVideo && remoteVideoView.visibility == View.VISIBLE) {
+                    remoteVideoView.getGlobalVisibleRect(sourceRect)
+                } else if (::layoutPipFallback.isInitialized && layoutPipFallback.visibility == View.VISIBLE) {
+                    layoutPipFallback.getGlobalVisibleRect(sourceRect)
+                } else {
+                    findViewById<View>(R.id.videoContainer)?.getGlobalVisibleRect(sourceRect)
+                }
+                if (!sourceRect.isEmpty) {
+                    builder.setSourceRectHint(sourceRect)
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val canEnterPip = (!isIncoming || isCallAccepted) && !isFinishing && !isDestroyed
+                    builder.setAutoEnterEnabled(canEnterPip)
+                }
+
+                setPictureInPictureParams(builder.build())
+            } catch (e: Exception) {
+                Log.w("CallActivity", "Error updating PiP params: ${e.message}")
+            }
+        }
+    }
+
     fun enterPipMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
-                // Tỷ lệ 9:16 chuẩn cho cửa sổ PiP cuộc gọi di động
                 val aspectRatio = Rational(9, 16)
                 val pipBuilder = PictureInPictureParams.Builder()
                     .setAspectRatio(aspectRatio)
+
+                val sourceRect = android.graphics.Rect()
+                if (hasRemoteVideo && remoteVideoView.visibility == View.VISIBLE) {
+                    remoteVideoView.getGlobalVisibleRect(sourceRect)
+                } else if (::layoutPipFallback.isInitialized && layoutPipFallback.visibility == View.VISIBLE) {
+                    layoutPipFallback.getGlobalVisibleRect(sourceRect)
+                } else {
+                    findViewById<View>(R.id.videoContainer)?.getGlobalVisibleRect(sourceRect)
+                }
+                if (!sourceRect.isEmpty) {
+                    pipBuilder.setSourceRectHint(sourceRect)
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val canEnterPip = (!isIncoming || isCallAccepted) && !isFinishing && !isDestroyed
+                    pipBuilder.setAutoEnterEnabled(canEnterPip)
+                }
+
                 enterPictureInPictureMode(pipBuilder.build())
             } catch (e: Exception) {
                 Log.e("CallActivity", "Error entering PiP mode: ${e.message}")
@@ -789,14 +881,20 @@ class CallActivity : AppCompatActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (isCallAccepted && !isFinishing && !isDestroyed) {
-            enterPipMode()
+        // Trên Android 12+ (API 31+), setAutoEnterEnabled(true) tự động chuyển sang PiP mượt mà khi vuốt Home.
+        // Đối với Android 8.0 - 11 (API 26-30), chủ động gọi enterPipMode().
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            val canEnterPip = (!isIncoming || isCallAccepted) && !isFinishing && !isDestroyed
+            if (canEnterPip) {
+                enterPipMode()
+            }
         }
     }
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (isCallAccepted) {
+        val canEnterPip = (!isIncoming || isCallAccepted) && !isFinishing && !isDestroyed
+        if (canEnterPip) {
             enterPipMode()
         } else {
             endCall()
@@ -809,23 +907,32 @@ class CallActivity : AppCompatActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isInPictureInPictureMode) {
-            // Khi ở chế độ thu nhỏ PiP: ẩn dock điều khiển và nút bấm để ưu tiên màn hình video
+            // Khi ở chế độ thu nhỏ PiP: ẩn dock điều khiển và nút bấm để ưu tiên màn hình video/thông tin
             callControlsBar.visibility = View.GONE
             btnMinimizeCall.visibility = View.GONE
             layoutCallQualityBadge.visibility = View.GONE
             cardLocalVideo.visibility = View.GONE
             layoutScreenShareBanner.visibility = View.GONE
 
-            if (remoteVideoView.visibility != View.VISIBLE) {
-                callHeaderLayout.visibility = View.VISIBLE
-                tvCallContactName.visibility = View.VISIBLE
-                tvCallTimer.visibility = View.VISIBLE
-                tvCallStatus.visibility = View.GONE
+            if (hasRemoteVideo) {
+                remoteVideoView.visibility = View.VISIBLE
+                layoutPipFallback.visibility = View.GONE
+                callHeaderLayout.visibility = View.GONE
+                remoteVideoView.requestLayout()
+            } else {
+                remoteVideoView.visibility = View.GONE
+                callHeaderLayout.visibility = View.GONE
+                layoutPipFallback.visibility = View.VISIBLE
+                tvPipAvatar.text = contactName.ifBlank { "U" }.take(1).uppercase()
+                tvPipContactName.text = contactName
+                tvPipTimer.text = if (isCallAccepted) tvCallTimer.text else tvCallStatus.text
             }
         } else {
             // Khi người dùng bấm vào PiP phóng to lại toàn màn hình: khôi phục giao diện
             btnMinimizeCall.visibility = View.VISIBLE
             layoutCallQualityBadge.visibility = View.VISIBLE
+            layoutPipFallback.visibility = View.GONE
+
             if (isCallAccepted) {
                 callControlsBar.visibility = View.VISIBLE
                 if (isVideoEnabled && !isScreenSharing) {
@@ -835,6 +942,19 @@ class CallActivity : AppCompatActivity() {
                     layoutScreenShareBanner.visibility = View.VISIBLE
                 }
             }
+
+            if (hasRemoteVideo) {
+                remoteVideoView.visibility = View.VISIBLE
+                callHeaderLayout.visibility = View.GONE
+                remoteVideoView.requestLayout()
+            } else {
+                remoteVideoView.visibility = View.GONE
+                callHeaderLayout.visibility = View.VISIBLE
+                tvCallContactName.visibility = View.VISIBLE
+                tvCallTimer.visibility = View.VISIBLE
+                tvCallStatus.visibility = View.VISIBLE
+            }
+            updatePictureInPictureParams()
         }
     }
 
