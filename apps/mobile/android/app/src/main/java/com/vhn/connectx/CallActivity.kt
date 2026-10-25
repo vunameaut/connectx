@@ -22,6 +22,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,6 +59,8 @@ class CallActivity : AppCompatActivity() {
     private lateinit var tvPipContactName: TextView
     private lateinit var tvPipTimer: TextView
     private var hasRemoteVideo = false
+    private var lastDragX: Float? = null
+    private var lastDragY: Float? = null
 
     private lateinit var callControlsBar: LinearLayout
     private lateinit var btnToggleMic: FloatingActionButton
@@ -212,6 +215,12 @@ class CallActivity : AppCompatActivity() {
         dismissNotification()
         com.vhn.connectx.service.CallBackgroundService.stopRinging(this)
         Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 300)
+
+        val autoAccept = intent.getBooleanExtra("EXTRA_AUTO_ACCEPT", false)
+        Log.i("CallActivity", "onNewIntent: autoAccept=$autoAccept, isCallAccepted=$isCallAccepted")
+        if (autoAccept && !isCallAccepted) {
+            acceptIncomingCall()
+        }
     }
 
     override fun onResume() {
@@ -220,6 +229,10 @@ class CallActivity : AppCompatActivity() {
         com.vhn.connectx.service.CallBackgroundService.stopRinging(this)
         Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 300)
         Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 1000)
+        val autoAccept = intent?.getBooleanExtra("EXTRA_AUTO_ACCEPT", false) ?: false
+        if (autoAccept && !isCallAccepted && isIncoming) {
+            acceptIncomingCall()
+        }
         updatePictureInPictureParams()
     }
 
@@ -427,6 +440,18 @@ class CallActivity : AppCompatActivity() {
         }, RINGING_TIMEOUT_MS)
     }
 
+    private fun acceptIncomingCall() {
+        if (isCallAccepted || isFinishing || isDestroyed) return
+        ringtone?.stop()
+        com.vhn.connectx.service.CallBackgroundService.stopRinging(this)
+        dismissNotification()
+        connectingTimeoutHandler.removeCallbacksAndMessages(null)
+        ringingTimeoutHandler.removeCallbacksAndMessages(null)
+        isCallAccepted = true
+        FirebaseSyncManager.updateCallStatus(callId, "ACCEPTED")
+        onCallConnected()
+    }
+
     private fun setupIncomingCallMode() {
         tvCallStatus.text = if (isVideoEnabled) "Cuộc gọi video đến..." else "Cuộc gọi thoại đến..."
         tvCallTimer.text = "Đang đổ chuông..."
@@ -460,13 +485,7 @@ class CallActivity : AppCompatActivity() {
         }, RINGING_TIMEOUT_MS)
 
         btnAcceptCall.setOnClickListener {
-            ringtone?.stop()
-            dismissNotification()
-            connectingTimeoutHandler.removeCallbacksAndMessages(null)
-            ringingTimeoutHandler.removeCallbacksAndMessages(null)
-            isCallAccepted = true
-            FirebaseSyncManager.updateCallStatus(callId, "ACCEPTED")
-            onCallConnected()
+            acceptIncomingCall()
         }
 
         btnDeclineCall.setOnClickListener {
@@ -482,7 +501,7 @@ class CallActivity : AppCompatActivity() {
 
         // Tự động nhận cuộc gọi nếu người dùng đã bấm nút "Trả lời" ngay trên thông báo banner
         if (intent.getBooleanExtra("EXTRA_AUTO_ACCEPT", false)) {
-            btnAcceptCall.performClick()
+            acceptIncomingCall()
         }
 
         // Listen if caller hangs up before answering
@@ -764,10 +783,17 @@ class CallActivity : AppCompatActivity() {
         var isDragging = false
         val density = resources.displayMetrics.density
 
+        cardLocalVideo.bringToFront()
+
         cardLocalVideo.setOnTouchListener { view, event ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
+                return@setOnTouchListener false
+            }
             val parentView = view.parent as? View ?: return@setOnTouchListener false
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    view.bringToFront()
+                    parentView.invalidate()
                     downRawX = event.rawX
                     downRawY = event.rawY
                     startX = view.x
@@ -780,12 +806,13 @@ class CallActivity : AppCompatActivity() {
                     val dy = event.rawY - downRawY
                     if (Math.hypot(dx.toDouble(), dy.toDouble()) > 10 * density) {
                         isDragging = true
+                        view.bringToFront()
                     }
                     if (isDragging) {
                         val minX = 12f * density
                         val maxX = (parentView.width - view.width - 12f * density).coerceAtLeast(minX)
                         val minY = 48f * density
-                        val maxY = (parentView.height - view.height - 120f * density).coerceAtLeast(minY)
+                        val maxY = (parentView.height - view.height - 48f * density).coerceAtLeast(minY)
 
                         view.x = (startX + dx).coerceIn(minX, maxX)
                         view.y = (startY + dy).coerceIn(minY, maxY)
@@ -794,6 +821,7 @@ class CallActivity : AppCompatActivity() {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (isDragging) {
+                        view.bringToFront()
                         val minX = 12f * density
                         val maxX = (parentView.width - view.width - 12f * density).coerceAtLeast(minX)
                         val middleX = parentView.width / 2f
@@ -803,6 +831,10 @@ class CallActivity : AppCompatActivity() {
                             .x(targetX)
                             .setDuration(250)
                             .setInterpolator(android.view.animation.DecelerateInterpolator())
+                            .withEndAction {
+                                lastDragX = view.x
+                                lastDragY = view.y
+                            }
                             .start()
                     } else {
                         view.performClick()
@@ -906,12 +938,12 @@ class CallActivity : AppCompatActivity() {
         newConfig: Configuration
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        val density = resources.displayMetrics.density
         if (isInPictureInPictureMode) {
             // Khi ở chế độ thu nhỏ PiP: ẩn dock điều khiển và nút bấm để ưu tiên màn hình video/thông tin
             callControlsBar.visibility = View.GONE
             btnMinimizeCall.visibility = View.GONE
             layoutCallQualityBadge.visibility = View.GONE
-            cardLocalVideo.visibility = View.GONE
             layoutScreenShareBanner.visibility = View.GONE
 
             if (hasRemoteVideo) {
@@ -919,8 +951,28 @@ class CallActivity : AppCompatActivity() {
                 layoutPipFallback.visibility = View.GONE
                 callHeaderLayout.visibility = View.GONE
                 remoteVideoView.requestLayout()
+
+                // Khi đối phương có video VÀ camera của mình cũng đang bật:
+                // Hiển thị cả camera của mình ở góc trên PiP (như Zalo / Messenger / FaceTime)
+                if (isVideoEnabled && !isScreenSharing) {
+                    val pipLocalParams = cardLocalVideo.layoutParams as RelativeLayout.LayoutParams
+                    pipLocalParams.width = (36 * density).toInt()
+                    pipLocalParams.height = (52 * density).toInt()
+                    pipLocalParams.topMargin = (6 * density).toInt()
+                    pipLocalParams.rightMargin = (6 * density).toInt()
+                    pipLocalParams.setMarginEnd((6 * density).toInt())
+                    cardLocalVideo.layoutParams = pipLocalParams
+                    cardLocalVideo.radius = 8 * density
+                    cardLocalVideo.translationX = 0f
+                    cardLocalVideo.translationY = 0f
+                    cardLocalVideo.visibility = View.VISIBLE
+                    cardLocalVideo.bringToFront()
+                } else {
+                    cardLocalVideo.visibility = View.GONE
+                }
             } else {
                 remoteVideoView.visibility = View.GONE
+                cardLocalVideo.visibility = View.GONE
                 callHeaderLayout.visibility = View.GONE
                 layoutPipFallback.visibility = View.VISIBLE
                 tvPipAvatar.text = contactName.ifBlank { "U" }.take(1).uppercase()
@@ -933,13 +985,39 @@ class CallActivity : AppCompatActivity() {
             layoutCallQualityBadge.visibility = View.VISIBLE
             layoutPipFallback.visibility = View.GONE
 
+            // Khôi phục kích thước và vị trí cardLocalVideo toàn màn hình (120x170dp)
+            val normalParams = cardLocalVideo.layoutParams as RelativeLayout.LayoutParams
+            normalParams.width = (120 * density).toInt()
+            normalParams.height = (170 * density).toInt()
+            normalParams.topMargin = (100 * density).toInt()
+            normalParams.rightMargin = (16 * density).toInt()
+            normalParams.setMarginEnd((16 * density).toInt())
+            cardLocalVideo.layoutParams = normalParams
+            cardLocalVideo.radius = 16 * density
+
+            if (lastDragX != null && lastDragY != null) {
+                cardLocalVideo.x = lastDragX!!
+                cardLocalVideo.y = lastDragY!!
+            } else {
+                cardLocalVideo.translationX = 0f
+                cardLocalVideo.translationY = 0f
+            }
+
             if (isCallAccepted) {
                 callControlsBar.visibility = View.VISIBLE
                 if (isVideoEnabled && !isScreenSharing) {
                     cardLocalVideo.visibility = View.VISIBLE
+                    cardLocalVideo.bringToFront()
+                } else {
+                    cardLocalVideo.visibility = View.GONE
                 }
                 if (isScreenSharing) {
                     layoutScreenShareBanner.visibility = View.VISIBLE
+                }
+            } else {
+                if (isVideoEnabled && !isIncoming) {
+                    cardLocalVideo.visibility = View.VISIBLE
+                    cardLocalVideo.bringToFront()
                 }
             }
 
