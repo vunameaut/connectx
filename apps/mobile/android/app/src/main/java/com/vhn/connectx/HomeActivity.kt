@@ -207,6 +207,10 @@ class HomeActivity : AppCompatActivity() {
 
         // Khởi động dịch vụ nền nhận cuộc gọi 24/7 và đổ chuông toàn màn hình
         CallBackgroundService.start(this)
+        try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            nm.cancel(1001)
+        } catch (e: Exception) {}
 
         // Xin quyền tự động 1 chạm khi mở app
         checkStartupPermissions()

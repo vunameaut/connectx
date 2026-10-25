@@ -52,10 +52,14 @@ class CallBackgroundService : Service() {
                 val intent = Intent(context, CallBackgroundService::class.java).apply {
                     action = ACTION_START_SERVICE
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    ContextCompat.startForegroundService(context, intent)
-                } else {
+                try {
                     context.startService(intent)
+                } catch (e: Exception) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        ContextCompat.startForegroundService(context, intent)
+                    } else {
+                        throw e
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start CallBackgroundService: ${e.message}", e)
@@ -189,13 +193,13 @@ class CallBackgroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            // 1. Service Background Keep-Alive Channel (Silent)
+            // 1. Service Background Keep-Alive Channel (Silent & Minimized)
             val serviceChannel = NotificationChannel(
                 CHANNEL_SERVICE_ID,
                 "ConnectX Dịch vụ Cuộc gọi",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Giữ kết nối nền để nhận cuộc gọi thoại và video 24/7"
+                description = "Giữ kết nối nhận cuộc gọi ConnectX"
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_SECRET
             }
@@ -225,6 +229,11 @@ class CallBackgroundService : Service() {
     }
 
     private fun startAsForeground() {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        try {
+            manager.cancel(NOTIFICATION_SERVICE_ID)
+        } catch (e: Exception) {}
+
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,
@@ -233,11 +242,10 @@ class CallBackgroundService : Service() {
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_SERVICE_ID)
-            .setContentTitle("ConnectX")
-            .setContentText("Đang sẵn sàng nhận cuộc gọi đến")
             .setSmallIcon(R.drawable.ic_calls)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setNotificationSilent()
             .setContentIntent(pendingIntent)
             .build()
 
@@ -253,13 +261,26 @@ class CallBackgroundService : Service() {
                 startForeground(NOTIFICATION_SERVICE_ID, notification)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "startForeground error: ${e.message}")
-            try {
-                startForeground(NOTIFICATION_SERVICE_ID, notification)
-            } catch (e2: Exception) {
-                Log.e(TAG, "startForeground fallback error: ${e2.message}")
-            }
+            Log.w(TAG, "startForeground error: ${e.message}")
         }
+
+        // Tắt bỏ hoàn toàn thông báo "Đang sẵn sàng nhận cuộc gọi đến", không để lưu lại trên thanh trạng thái
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            manager.cancel(NOTIFICATION_SERVICE_ID)
+        } catch (e: Exception) {
+            Log.w(TAG, "stopForeground error: ${e.message}")
+        }
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        startListeningForIncomingCalls()
     }
 
     private fun startListeningForIncomingCalls() {
