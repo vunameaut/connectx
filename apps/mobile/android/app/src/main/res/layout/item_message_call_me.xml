@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="end"
+    android:paddingVertical="4dp"
+    android:paddingStart="64dp"
+    android:paddingEnd="12dp">
+
+    <LinearLayout
+        android:id="@+id/layoutCallCardMe"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="190dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_call_card_me"
+        android:elevation="1dp">
+
+        <!-- Title: "Cuộc gọi video đi" / "Cuộc gọi thoại đi" -->
+        <TextView
+            android:id="@+id/tvCallTitleMe"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cuộc gọi video đi"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- Detail row: Icon + Duration/Status -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <ImageView
+                android:id="@+id/ivCallIconMe"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_call_video_outgoing"
+                android:contentDescription="Call status icon" />
+
+            <TextView
+                android:id="@+id/tvCallDetailMe"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="5 phút 6 giây"
+                android:textColor="#94A3B8"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Divider line -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#2C425F"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="6dp" />
+
+        <!-- Callback Button: "Gọi lại" -->
+        <TextView
+            android:id="@+id/btnCallBackMe"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:paddingVertical="4dp"
+            android:text="Gọi lại"
+            android:textColor="#38BDF8"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:background="?attr/selectableItemBackground" />
+    </LinearLayout>
+
+    <!-- Timestamp & Sent Status -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:layout_marginTop="3dp">
+
+        <TextView
+            android:id="@+id/tvCallTimeMe"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="10:40"
+            android:textColor="#94A3B8"
+            android:textSize="11sp" />
+
+        <ImageView
+            android:id="@+id/ivCallStatusMe"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginStart="4dp"
+            android:src="@drawable/ic_check_double"
+            app:tint="#38BDF8" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -220,13 +220,21 @@ class AppDataStore(context: Context) {
 
     fun addMessage(convId: String, message: Message) {
         val list = getMessages(convId)
-        if (list.any { it.id == message.id }) return
-        list.add(message)
+        val existingIndex = list.indexOfFirst { it.id == message.id }
+        if (existingIndex >= 0) {
+            list[existingIndex] = message
+        } else {
+            list.add(message)
+        }
         prefs.edit().putString(KEY_MESSAGES_PREFIX + convId, gson.toJson(list)).apply()
         updateConversation(
             convId = convId,
             title = message.senderName,
-            lastMessage = if (message.messageType == "image") "📷 [Hình ảnh]" else message.text,
+            lastMessage = when (message.messageType) {
+                "image" -> "📷 [Hình ảnh]"
+                "call" -> if (message.isVideoCall) "📹 [Cuộc gọi video]" else "📞 [Cuộc gọi thoại]"
+                else -> message.text
+            },
             timestamp = message.timestamp
         )
     }

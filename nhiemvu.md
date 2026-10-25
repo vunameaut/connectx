@@ -5,3 +5,4 @@ nhiệm vụ 4: tab danh bạ phần tìm kiếm chưa hoạt động, làm lạ
 nhiệm vụ 5: tab lịch sử cuộc gọi nếu cùng 1 người thì để gộp vào, nếu ấn vào thì mới hiển thị ra lịch sử gọi điện của người đó với mình ( à chưa có hiển thị cuộc gọi nhỡ, hay không kết nối được) ✅ (Đã hoàn thành)
 nhiệm vụ 6: tab cá nhân đang để những chức năng tester sửa lại để nó thực sự giống 1 cái app nhắn tin gọi điện ( có setting, .....) ✅ (Đã hoàn thành)
 nhiệm vụ 7: khi cho app chạy dưới nền hay tắt hẳn app thì khi có người gọi điện đến cho mình thì nó sẽ không hiển thị thông báo và không đổ chuông ( tôi đang dùng điện thoại realme GT 5), tôi muốn nó nổ hẳn cả màn hình như gọi bên zalo hay mess cơ ✅ (Đã hoàn thành)
+nhiệm vụ 8: hiển thị lịch sử cuộc gọi trực tiếp trong khung chat theo kiểu Zalo (thẻ cuộc gọi đến/đi, thời lượng đàm thoại, cuộc gọi nhỡ, nút Gọi lại) ✅ (Đã hoàn thành)

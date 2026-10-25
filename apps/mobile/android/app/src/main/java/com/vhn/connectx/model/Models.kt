@@ -37,7 +37,11 @@ data class Message(
     val timestamp: String,
     val isMe: Boolean,
     val mediaUrl: String? = null,
-    val messageType: String = "text" // "text", "image", "video", "call", "file"
+    val messageType: String = "text", // "text", "image", "video", "call", "file"
+    val callId: String? = null,
+    val isVideoCall: Boolean = false,
+    val callStatus: String? = null, // "CONNECTED", "MISSED", "DECLINED", "UNREACHABLE", "CANCELLED", "ENDED"
+    val callDurationSeconds: Int = 0
 )
 
 data class CallHistoryItem(

@@ -323,13 +323,23 @@ object FirebaseSyncManager {
             "timestamp" to message.timestamp,
             "mediaUrl" to (message.mediaUrl ?: ""),
             "messageType" to message.messageType,
+            "callId" to (message.callId ?: ""),
+            "isVideoCall" to message.isVideoCall,
+            "callStatus" to (message.callStatus ?: ""),
+            "callDurationSeconds" to message.callDurationSeconds,
             "serverTime" to System.currentTimeMillis()
         )
+
+        val summaryText = when (message.messageType) {
+            "image" -> "📷 [Hình ảnh]"
+            "call" -> if (message.isVideoCall) "📹 [Cuộc gọi video]" else "📞 [Cuộc gọi thoại]"
+            else -> message.text
+        }
 
         // 1. Update Conversation document summary
         val convSummary = hashMapOf(
             "id" to convId,
-            "lastMessage" to if (message.messageType == "image") "📷 [Hình ảnh]" else message.text,
+            "lastMessage" to summaryText,
             "lastMessageSender" to message.senderName,
             "lastTimestamp" to message.timestamp,
             "lastServerTime" to System.currentTimeMillis()
@@ -351,6 +361,74 @@ object FirebaseSyncManager {
             .addOnFailureListener { e ->
                 Log.w(TAG, "Failed uploading message to Firestore: ${e.message}")
                 onComplete(false)
+            }
+    }
+
+    /**
+     * Ghi nhận lịch sử cuộc gọi trực tiếp vào khung chat giữa 2 người (tương tự Zalo).
+     */
+    fun recordCallMessage(
+        convId: String,
+        callId: String,
+        callerId: String,
+        callerName: String,
+        callerEmail: String,
+        isVideo: Boolean,
+        callStatus: String,
+        durationSeconds: Int,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        if (convId.isBlank() || callId.isBlank()) return
+        val messageId = "call_msg_$callId"
+        val timeFormat = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+
+        val summaryText = if (isVideo) {
+            if (callStatus == "MISSED") "📹 [Cuộc gọi video nhỡ]" else "📹 [Cuộc gọi video]"
+        } else {
+            if (callStatus == "MISSED") "📞 [Cuộc gọi nhỡ]" else "📞 [Cuộc gọi thoại]"
+        }
+
+        val data = hashMapOf(
+            "id" to messageId,
+            "conversationId" to convId,
+            "senderId" to callerId,
+            "senderName" to callerName,
+            "senderEmail" to callerEmail.trim().lowercase(),
+            "text" to if (isVideo) "Cuộc gọi video" else "Cuộc gọi thoại",
+            "timestamp" to timeFormat,
+            "mediaUrl" to "",
+            "messageType" to "call",
+            "callId" to callId,
+            "isVideoCall" to isVideo,
+            "callStatus" to callStatus,
+            "callDurationSeconds" to durationSeconds,
+            "serverTime" to System.currentTimeMillis()
+        )
+
+        val convSummary = hashMapOf(
+            "id" to convId,
+            "lastMessage" to summaryText,
+            "lastMessageSender" to callerName,
+            "lastTimestamp" to timeFormat,
+            "lastServerTime" to System.currentTimeMillis()
+        )
+
+        firestore.collection("conversations")
+            .document(convId)
+            .set(convSummary, com.google.firebase.firestore.SetOptions.merge())
+
+        firestore.collection("conversations")
+            .document(convId)
+            .collection("messages")
+            .document(messageId)
+            .set(data, com.google.firebase.firestore.SetOptions.merge())
+            .addOnSuccessListener {
+                Log.i(TAG, "Call log message successfully recorded: $messageId in $convId")
+                onComplete?.invoke(true)
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Failed recording call log message: ${e.message}")
+                onComplete?.invoke(false)
             }
     }
 
@@ -384,6 +462,10 @@ object FirebaseSyncManager {
                             val timestamp = doc.getString("timestamp") ?: ""
                             val mediaUrl = doc.getString("mediaUrl").takeIf { !it.isNullOrBlank() }
                             val messageType = doc.getString("messageType") ?: "text"
+                            val callId = doc.getString("callId")
+                            val isVideoCall = doc.getBoolean("isVideoCall") ?: false
+                            val callStatus = doc.getString("callStatus")
+                            val callDurationSeconds = doc.getLong("callDurationSeconds")?.toInt() ?: 0
 
                             list.add(
                                 Message(
@@ -395,7 +477,11 @@ object FirebaseSyncManager {
                                     timestamp = timestamp,
                                     isMe = (senderId == currentUserId),
                                     mediaUrl = mediaUrl,
-                                    messageType = messageType
+                                    messageType = messageType,
+                                    callId = callId,
+                                    isVideoCall = isVideoCall,
+                                    callStatus = callStatus,
+                                    callDurationSeconds = callDurationSeconds
                                 )
                             )
                         }

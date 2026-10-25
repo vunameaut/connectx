@@ -128,8 +128,13 @@ class ChatActivity : AppCompatActivity() {
             if (remoteMessages.isNotEmpty()) {
                 var hasNew = false
                 for (remoteMsg in remoteMessages) {
-                    if (messages.none { it.id == remoteMsg.id }) {
+                    val existingIndex = messages.indexOfFirst { it.id == remoteMsg.id }
+                    if (existingIndex == -1) {
                         messages.add(remoteMsg)
+                        appDataStore.addMessage(convId, remoteMsg)
+                        hasNew = true
+                    } else if (messages[existingIndex] != remoteMsg) {
+                        messages[existingIndex] = remoteMsg
                         appDataStore.addMessage(convId, remoteMsg)
                         hasNew = true
                     }
@@ -224,7 +229,26 @@ class ChatActivity : AppCompatActivity() {
         val layoutManager = LinearLayoutManager(this)
         layoutManager.stackFromEnd = true
         rvMessages.layoutManager = layoutManager
-        messageAdapter = MessageAdapter(messages)
+        messageAdapter = MessageAdapter(messages) { isVideo ->
+            val callId = "call_${System.currentTimeMillis()}"
+            val callItem = CallHistoryItem(
+                id = callId,
+                contactName = contactTitle,
+                timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
+                isVideo = isVideo,
+                isIncoming = false
+            )
+            appDataStore.addCallHistory(callItem)
+
+            val intent = Intent(this, CallActivity::class.java).apply {
+                putExtra("EXTRA_CALL_ID", callId)
+                putExtra("EXTRA_CONTACT_NAME", contactTitle)
+                putExtra("EXTRA_CONTACT_EMAIL", contactEmail)
+                putExtra("EXTRA_IS_VIDEO", isVideo)
+                putExtra("EXTRA_IS_INCOMING", false)
+            }
+            startActivity(intent)
+        }
         rvMessages.adapter = messageAdapter
 
         btnSendMessage.setOnClickListener {
@@ -393,8 +417,13 @@ class ChatActivity : AppCompatActivity() {
             if (remoteMessages.isNotEmpty()) {
                 var hasNew = false
                 for (remoteMsg in remoteMessages) {
-                    if (messages.none { it.id == remoteMsg.id }) {
+                    val existingIndex = messages.indexOfFirst { it.id == remoteMsg.id }
+                    if (existingIndex == -1) {
                         messages.add(remoteMsg)
+                        appDataStore.addMessage(convId, remoteMsg)
+                        hasNew = true
+                    } else if (messages[existingIndex] != remoteMsg) {
+                        messages[existingIndex] = remoteMsg
                         appDataStore.addMessage(convId, remoteMsg)
                         hasNew = true
                     }

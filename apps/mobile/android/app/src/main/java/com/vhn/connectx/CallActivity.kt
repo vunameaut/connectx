@@ -34,6 +34,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.firebase.firestore.ListenerRegistration
 import com.vhn.connectx.data.AppDataStore
 import com.vhn.connectx.model.CallHistoryItem
+import com.vhn.connectx.model.Message
 import com.vhn.connectx.model.SessionManager
 import com.vhn.connectx.net.FirebaseSyncManager
 import java.text.SimpleDateFormat
@@ -93,6 +94,7 @@ class CallActivity : AppCompatActivity() {
     private var isScreenSharing = false
     private var isIncoming = false
     private var isCallAccepted = false
+    private var isCallLogged = false
 
     private var callId: String = ""
     private var contactName: String = ""
@@ -420,6 +422,7 @@ class CallActivity : AppCompatActivity() {
             tvCallStatus.text = "Thuê bao hiện không thể liên lạc"
             FirebaseSyncManager.updateCallStatus(callId, "UNREACHABLE")
             AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "UNREACHABLE")
+            logCallToChat("UNREACHABLE")
             Toast.makeText(this, "Thuê bao hiện không có phản hồi tín hiệu (Không đổ chuông)", Toast.LENGTH_SHORT).show()
             Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
         }, CONNECTING_TIMEOUT_MS)
@@ -435,6 +438,7 @@ class CallActivity : AppCompatActivity() {
             tvCallStatus.text = "Người nhận không trả lời"
             FirebaseSyncManager.updateCallStatus(callId, "MISSED")
             AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "MISSED")
+            logCallToChat("MISSED")
             Toast.makeText(this, "Không có phản hồi từ đối phương (Hết thời gian chờ)", Toast.LENGTH_SHORT).show()
             Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
         }, RINGING_TIMEOUT_MS)
@@ -480,6 +484,7 @@ class CallActivity : AppCompatActivity() {
             tvCallStatus.text = "Cuộc gọi nhỡ"
             FirebaseSyncManager.updateCallStatus(callId, "MISSED")
             AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "MISSED")
+            logCallToChat("MISSED")
             Toast.makeText(this, "Cuộc gọi nhỡ từ $contactName", Toast.LENGTH_SHORT).show()
             Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
         }, RINGING_TIMEOUT_MS)
@@ -495,6 +500,7 @@ class CallActivity : AppCompatActivity() {
             ringingTimeoutHandler.removeCallbacksAndMessages(null)
             FirebaseSyncManager.updateCallStatus(callId, "DECLINED")
             AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "DECLINED")
+            logCallToChat("DECLINED")
             Toast.makeText(this, "Đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
             finish()
         }
@@ -544,6 +550,7 @@ class CallActivity : AppCompatActivity() {
                         connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
                         AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "DECLINED")
+                        logCallToChat("DECLINED")
                         tvCallStatus.text = "Đối phương bận máy"
                         Toast.makeText(this, "Đối phương đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
                         Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
@@ -554,6 +561,7 @@ class CallActivity : AppCompatActivity() {
                         connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
                         AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "MISSED")
+                        logCallToChat("MISSED")
                         tvCallStatus.text = "Người nhận không trả lời"
                         Toast.makeText(this, "Không có phản hồi từ đối phương", Toast.LENGTH_SHORT).show()
                         Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
@@ -564,6 +572,7 @@ class CallActivity : AppCompatActivity() {
                         connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
                         AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "UNREACHABLE")
+                        logCallToChat("UNREACHABLE")
                         tvCallStatus.text = "Thuê bao không thể liên lạc"
                         Toast.makeText(this, "Thuê bao hiện không thể liên lạc được (Không có kết nối)", Toast.LENGTH_SHORT).show()
                         Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1800)
@@ -575,6 +584,7 @@ class CallActivity : AppCompatActivity() {
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
                         val finalStatus = if (isCallAccepted) "CONNECTED" else if (status == "CANCELLED") "CANCELLED" else "ENDED"
                         AppDataStore.getInstance(this).updateCallHistoryStatus(callId, finalStatus, callSeconds)
+                        logCallToChat(finalStatus)
                         tvCallStatus.text = if (status == "CANCELLED") "Người gọi đã huỷ" else "Cuộc gọi đã kết thúc"
                         timerHandler.removeCallbacks(timerRunnable)
                         Toast.makeText(this, if (status == "CANCELLED") "Cuộc gọi đã bị huỷ" else "Cuộc gọi đã kết thúc", Toast.LENGTH_SHORT).show()
@@ -755,6 +765,50 @@ class CallActivity : AppCompatActivity() {
         }
     }
 
+    private fun logCallToChat(finalStatus: String) {
+        if (isCallLogged || callId.isBlank() || contactEmail.isBlank()) return
+        isCallLogged = true
+
+        val myEmail = sessionManager.currentUser.email
+        val myName = sessionManager.currentUser.displayName
+        val myId = sessionManager.currentUser.id
+
+        val callerEmail = if (isIncoming) contactEmail else myEmail
+        val callerName = if (isIncoming) contactName else myName
+        val callerId = if (isIncoming) "u_${contactEmail.hashCode()}" else myId
+
+        val convId = AppDataStore.getInstance(this).getDirectConvId(myEmail, contactEmail)
+        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+
+        val localMsg = Message(
+            id = "call_msg_$callId",
+            conversationId = convId,
+            senderId = callerId,
+            senderName = callerName,
+            text = if (isVideoEnabled) "Cuộc gọi video" else "Cuộc gọi thoại",
+            timestamp = timeFormat,
+            isMe = !isIncoming,
+            mediaUrl = null,
+            messageType = "call",
+            callId = callId,
+            isVideoCall = isVideoEnabled,
+            callStatus = finalStatus,
+            callDurationSeconds = callSeconds
+        )
+        AppDataStore.getInstance(this).addMessage(convId, localMsg)
+
+        FirebaseSyncManager.recordCallMessage(
+            convId = convId,
+            callId = callId,
+            callerId = callerId,
+            callerName = callerName,
+            callerEmail = callerEmail,
+            isVideo = isVideoEnabled,
+            callStatus = finalStatus,
+            durationSeconds = callSeconds
+        )
+    }
+
     private fun endCall() {
         ringtone?.stop()
         dismissNotification()
@@ -767,6 +821,7 @@ class CallActivity : AppCompatActivity() {
         timerHandler.removeCallbacks(timerRunnable)
         val finalStatus = if (isCallAccepted) "CONNECTED" else "CANCELLED"
         AppDataStore.getInstance(this).updateCallHistoryStatus(callId, finalStatus, callSeconds)
+        logCallToChat(finalStatus)
         FirebaseSyncManager.updateCallStatus(callId, "ENDED")
         webRtcManager?.cleanup()
         webRtcManager = null
@@ -1051,6 +1106,10 @@ class CallActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         isCallActive = false
+        if (!isCallLogged && callId.isNotBlank() && contactEmail.isNotBlank()) {
+            val fallbackStatus = if (isCallAccepted) "CONNECTED" else "CANCELLED"
+            logCallToChat(fallbackStatus)
+        }
         ringtone?.stop()
         com.vhn.connectx.service.CallBackgroundService.stopRinging(this)
         dismissNotification()
