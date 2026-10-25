@@ -1,11 +1,14 @@
 package com.vhn.connectx
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.app.PictureInPictureParams
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Color
 import android.media.Ringtone
 import android.media.RingtoneManager
@@ -14,7 +17,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.Rational
+import android.view.MotionEvent
 import android.view.View
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -54,6 +60,8 @@ class CallActivity : AppCompatActivity() {
     private lateinit var btnToggleScreenShare: FloatingActionButton
     private lateinit var tvScreenShareLabel: TextView
     private lateinit var btnEndCall: FloatingActionButton
+    private lateinit var btnMinimizeCall: ImageButton
+    private lateinit var layoutCallQualityBadge: View
 
     // WebRTC Video Surfaces
     private lateinit var remoteVideoView: org.webrtc.SurfaceViewRenderer
@@ -191,12 +199,14 @@ class CallActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         dismissNotification()
+        com.vhn.connectx.service.CallBackgroundService.stopRinging(this)
         Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 300)
     }
 
     override fun onResume() {
         super.onResume()
         dismissNotification()
+        com.vhn.connectx.service.CallBackgroundService.stopRinging(this)
         Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 300)
         Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 1000)
     }
@@ -205,6 +215,7 @@ class CallActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         isCallActive = true
         dismissNotification()
+        com.vhn.connectx.service.CallBackgroundService.stopRinging(this)
         Handler(Looper.getMainLooper()).postDelayed({ dismissNotification() }, 300)
 
         // Wake screen and show over lockscreen like Zalo / WhatsApp
@@ -242,7 +253,10 @@ class CallActivity : AppCompatActivity() {
             contactName = contactName,
             timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
             isVideo = isVideoEnabled,
-            isIncoming = isIncoming
+            isIncoming = isIncoming,
+            status = if (isIncoming) "MISSED" else "UNREACHABLE",
+            durationSeconds = 0,
+            contactEmail = contactEmail
         )
         AppDataStore.getInstance(this).addCallHistory(callItem)
 
@@ -312,6 +326,13 @@ class CallActivity : AppCompatActivity() {
 
         tvCallContactName.text = contactName
         tvCallAvatar.text = contactName.ifBlank { "U" }.take(1).uppercase()
+
+        btnMinimizeCall = findViewById(R.id.btnMinimizeCall)
+        layoutCallQualityBadge = findViewById(R.id.layoutCallQualityBadge)
+        btnMinimizeCall.setOnClickListener {
+            enterPipMode()
+        }
+        setupDraggableLocalVideo()
     }
 
     private fun setupOutgoingCallMode() {
@@ -356,6 +377,7 @@ class CallActivity : AppCompatActivity() {
             if (isCallAccepted || isRingingReceived || isFinishing || isDestroyed) return@postDelayed
             tvCallStatus.text = "Thuê bao hiện không thể liên lạc"
             FirebaseSyncManager.updateCallStatus(callId, "UNREACHABLE")
+            AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "UNREACHABLE")
             Toast.makeText(this, "Thuê bao hiện không có phản hồi tín hiệu (Không đổ chuông)", Toast.LENGTH_SHORT).show()
             Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
         }, CONNECTING_TIMEOUT_MS)
@@ -370,6 +392,7 @@ class CallActivity : AppCompatActivity() {
             if (isCallAccepted || isFinishing || isDestroyed) return@postDelayed
             tvCallStatus.text = "Người nhận không trả lời"
             FirebaseSyncManager.updateCallStatus(callId, "MISSED")
+            AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "MISSED")
             Toast.makeText(this, "Không có phản hồi từ đối phương (Hết thời gian chờ)", Toast.LENGTH_SHORT).show()
             Handler(Looper.getMainLooper()).postDelayed({ finish() }, 2000)
         }, RINGING_TIMEOUT_MS)
@@ -401,6 +424,7 @@ class CallActivity : AppCompatActivity() {
             dismissNotification()
             tvCallStatus.text = "Cuộc gọi nhỡ"
             FirebaseSyncManager.updateCallStatus(callId, "MISSED")
+            AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "MISSED")
             Toast.makeText(this, "Cuộc gọi nhỡ từ $contactName", Toast.LENGTH_SHORT).show()
             Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
         }, RINGING_TIMEOUT_MS)
@@ -421,6 +445,7 @@ class CallActivity : AppCompatActivity() {
             connectingTimeoutHandler.removeCallbacksAndMessages(null)
             ringingTimeoutHandler.removeCallbacksAndMessages(null)
             FirebaseSyncManager.updateCallStatus(callId, "DECLINED")
+            AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "DECLINED")
             Toast.makeText(this, "Đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
             finish()
         }
@@ -454,6 +479,7 @@ class CallActivity : AppCompatActivity() {
                     "ACCEPTED" -> {
                         connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
+                        AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "CONNECTED")
                         if (!isCallAccepted) {
                             onCallConnected()
                         }
@@ -463,6 +489,7 @@ class CallActivity : AppCompatActivity() {
                         dismissNotification()
                         connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
+                        AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "DECLINED")
                         tvCallStatus.text = "Đối phương bận máy"
                         Toast.makeText(this, "Đối phương đã từ chối cuộc gọi", Toast.LENGTH_SHORT).show()
                         Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
@@ -472,6 +499,7 @@ class CallActivity : AppCompatActivity() {
                         dismissNotification()
                         connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
+                        AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "MISSED")
                         tvCallStatus.text = "Người nhận không trả lời"
                         Toast.makeText(this, "Không có phản hồi từ đối phương", Toast.LENGTH_SHORT).show()
                         Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1500)
@@ -481,6 +509,7 @@ class CallActivity : AppCompatActivity() {
                         dismissNotification()
                         connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
+                        AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "UNREACHABLE")
                         tvCallStatus.text = "Thuê bao không thể liên lạc"
                         Toast.makeText(this, "Thuê bao hiện không thể liên lạc được (Không có kết nối)", Toast.LENGTH_SHORT).show()
                         Handler(Looper.getMainLooper()).postDelayed({ finish() }, 1800)
@@ -490,6 +519,8 @@ class CallActivity : AppCompatActivity() {
                         dismissNotification()
                         connectingTimeoutHandler.removeCallbacksAndMessages(null)
                         ringingTimeoutHandler.removeCallbacksAndMessages(null)
+                        val finalStatus = if (isCallAccepted) "CONNECTED" else if (status == "CANCELLED") "CANCELLED" else "ENDED"
+                        AppDataStore.getInstance(this).updateCallHistoryStatus(callId, finalStatus, callSeconds)
                         tvCallStatus.text = if (status == "CANCELLED") "Người gọi đã huỷ" else "Cuộc gọi đã kết thúc"
                         timerHandler.removeCallbacks(timerRunnable)
                         Toast.makeText(this, if (status == "CANCELLED") "Cuộc gọi đã bị huỷ" else "Cuộc gọi đã kết thúc", Toast.LENGTH_SHORT).show()
@@ -502,6 +533,7 @@ class CallActivity : AppCompatActivity() {
 
     private fun onCallConnected() {
         isCallAccepted = true
+        AppDataStore.getInstance(this).updateCallHistoryStatus(callId, "CONNECTED")
         ringtone?.stop()
         dismissNotification()
         connectingTimeoutHandler.removeCallbacksAndMessages(null)
@@ -665,6 +697,8 @@ class CallActivity : AppCompatActivity() {
             screenCaptureModule.stopCapture()
         }
         timerHandler.removeCallbacks(timerRunnable)
+        val finalStatus = if (isCallAccepted) "CONNECTED" else "CANCELLED"
+        AppDataStore.getInstance(this).updateCallHistoryStatus(callId, finalStatus, callSeconds)
         FirebaseSyncManager.updateCallStatus(callId, "ENDED")
         webRtcManager?.cleanup()
         webRtcManager = null
@@ -672,10 +706,138 @@ class CallActivity : AppCompatActivity() {
         finish()
     }
 
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupDraggableLocalVideo() {
+        var downRawX = 0f
+        var downRawY = 0f
+        var startX = 0f
+        var startY = 0f
+        var isDragging = false
+        val density = resources.displayMetrics.density
+
+        cardLocalVideo.setOnTouchListener { view, event ->
+            val parentView = view.parent as? View ?: return@setOnTouchListener false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startX = view.x
+                    startY = view.y
+                    isDragging = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - downRawX
+                    val dy = event.rawY - downRawY
+                    if (Math.hypot(dx.toDouble(), dy.toDouble()) > 10 * density) {
+                        isDragging = true
+                    }
+                    if (isDragging) {
+                        val minX = 12f * density
+                        val maxX = (parentView.width - view.width - 12f * density).coerceAtLeast(minX)
+                        val minY = 48f * density
+                        val maxY = (parentView.height - view.height - 120f * density).coerceAtLeast(minY)
+
+                        view.x = (startX + dx).coerceIn(minX, maxX)
+                        view.y = (startY + dy).coerceIn(minY, maxY)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isDragging) {
+                        val minX = 12f * density
+                        val maxX = (parentView.width - view.width - 12f * density).coerceAtLeast(minX)
+                        val middleX = parentView.width / 2f
+                        val targetX = if (view.x + view.width / 2f < middleX) minX else maxX
+
+                        view.animate()
+                            .x(targetX)
+                            .setDuration(250)
+                            .setInterpolator(android.view.animation.DecelerateInterpolator())
+                            .start()
+                    } else {
+                        view.performClick()
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    fun enterPipMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                // Tỷ lệ 9:16 chuẩn cho cửa sổ PiP cuộc gọi di động
+                val aspectRatio = Rational(9, 16)
+                val pipBuilder = PictureInPictureParams.Builder()
+                    .setAspectRatio(aspectRatio)
+                enterPictureInPictureMode(pipBuilder.build())
+            } catch (e: Exception) {
+                Log.e("CallActivity", "Error entering PiP mode: ${e.message}")
+                moveTaskToBack(true)
+            }
+        } else {
+            moveTaskToBack(true)
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (isCallAccepted && !isFinishing && !isDestroyed) {
+            enterPipMode()
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (isCallAccepted) {
+            enterPipMode()
+        } else {
+            endCall()
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (isInPictureInPictureMode) {
+            // Khi ở chế độ thu nhỏ PiP: ẩn dock điều khiển và nút bấm để ưu tiên màn hình video
+            callControlsBar.visibility = View.GONE
+            btnMinimizeCall.visibility = View.GONE
+            layoutCallQualityBadge.visibility = View.GONE
+            cardLocalVideo.visibility = View.GONE
+            layoutScreenShareBanner.visibility = View.GONE
+
+            if (remoteVideoView.visibility != View.VISIBLE) {
+                callHeaderLayout.visibility = View.VISIBLE
+                tvCallContactName.visibility = View.VISIBLE
+                tvCallTimer.visibility = View.VISIBLE
+                tvCallStatus.visibility = View.GONE
+            }
+        } else {
+            // Khi người dùng bấm vào PiP phóng to lại toàn màn hình: khôi phục giao diện
+            btnMinimizeCall.visibility = View.VISIBLE
+            layoutCallQualityBadge.visibility = View.VISIBLE
+            if (isCallAccepted) {
+                callControlsBar.visibility = View.VISIBLE
+                if (isVideoEnabled && !isScreenSharing) {
+                    cardLocalVideo.visibility = View.VISIBLE
+                }
+                if (isScreenSharing) {
+                    layoutScreenShareBanner.visibility = View.VISIBLE
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         isCallActive = false
         ringtone?.stop()
+        com.vhn.connectx.service.CallBackgroundService.stopRinging(this)
         dismissNotification()
         connectingTimeoutHandler.removeCallbacksAndMessages(null)
         ringingTimeoutHandler.removeCallbacksAndMessages(null)

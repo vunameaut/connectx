@@ -50,3 +50,9 @@ xcuserdata/
 
 # TURN relay credentials (local only)
 apps/mobile/android/turn.properties
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.iml
+**/apps/mobile/.idea/

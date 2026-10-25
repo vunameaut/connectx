@@ -25,13 +25,7 @@ class MessageAdapter(
     private val messages: MutableList<Message>
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-    companion object {
-        private const val VIEW_TYPE_ME = 1
-        private const val VIEW_TYPE_OTHER = 2
-        private val imageExecutor = Executors.newFixedThreadPool(4)
-        private val mainHandler = Handler(Looper.getMainLooper())
-        private val okHttpClient = OkHttpClient()
-    }
+
 
     override fun getItemViewType(position: Int): Int {
         return if (messages[position].isMe) VIEW_TYPE_ME else VIEW_TYPE_OTHER
@@ -117,65 +111,73 @@ class MessageAdapter(
         return null
     }
 
-    private fun loadImageAsync(imageView: ImageView, path: String) {
-        imageView.setImageDrawable(null)
-        imageView.tag = path
+    companion object {
+        private const val VIEW_TYPE_ME = 1
+        private const val VIEW_TYPE_OTHER = 2
+        private val imageExecutor = Executors.newFixedThreadPool(4)
+        private val mainHandler = Handler(Looper.getMainLooper())
+        private val okHttpClient = OkHttpClient()
 
-        imageExecutor.execute {
-            var bitmap: Bitmap? = null
-            try {
-                if (path.startsWith("data:image")) {
-                    val base64Data = path.substringAfter("base64,")
-                    val decodedBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
-                    bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
-                } else if (path.startsWith("content://")) {
-                    val uri = Uri.parse(path)
-                    imageView.context.contentResolver.openInputStream(uri)?.use { stream ->
-                        bitmap = BitmapFactory.decodeStream(stream)
-                    }
-                } else if (path.startsWith("/")) {
-                    val file = File(path)
-                    if (file.exists()) {
-                        bitmap = BitmapFactory.decodeFile(file.absolutePath)
-                    }
-                } else if (path.startsWith("http://") || path.startsWith("https://")) {
-                    val req = Request.Builder().url(path).build()
-                    val response = okHttpClient.newCall(req).execute()
-                    if (response.isSuccessful) {
-                        response.body?.byteStream()?.use { stream ->
+        fun loadImageAsync(imageView: ImageView, path: String) {
+            imageView.setImageDrawable(null)
+            imageView.tag = path
+
+            imageExecutor.execute {
+                var bitmap: Bitmap? = null
+                try {
+                    if (path.startsWith("data:image")) {
+                        val base64Data = path.substringAfter("base64,")
+                        val decodedBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                        bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+                    } else if (path.startsWith("content://")) {
+                        val uri = Uri.parse(path)
+                        imageView.context.contentResolver.openInputStream(uri)?.use { stream ->
                             bitmap = BitmapFactory.decodeStream(stream)
+                        }
+                    } else if (path.startsWith("/")) {
+                        val file = File(path)
+                        if (file.exists()) {
+                            bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                        }
+                    } else if (path.startsWith("http://") || path.startsWith("https://")) {
+                        val req = Request.Builder().url(path).build()
+                        val response = okHttpClient.newCall(req).execute()
+                        if (response.isSuccessful) {
+                            response.body?.byteStream()?.use { stream ->
+                                bitmap = BitmapFactory.decodeStream(stream)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                if (bitmap != null) {
+                    mainHandler.post {
+                        if (imageView.tag == path) {
+                            imageView.setImageBitmap(bitmap)
                         }
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-
-            if (bitmap != null) {
-                mainHandler.post {
-                    if (imageView.tag == path) {
-                        imageView.setImageBitmap(bitmap)
-                    }
-                }
             }
         }
-    }
 
-    private fun showFullscreenImage(context: android.content.Context, path: String) {
-        val dialog = Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        val fullImageView = ImageView(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            setBackgroundColor(android.graphics.Color.BLACK)
-            setOnClickListener { dialog.dismiss() }
+        fun showFullscreenImage(context: android.content.Context, path: String) {
+            val dialog = Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+            val fullImageView = ImageView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setBackgroundColor(android.graphics.Color.BLACK)
+                setOnClickListener { dialog.dismiss() }
+            }
+            dialog.setContentView(fullImageView)
+            loadImageAsync(fullImageView, path)
+            dialog.show()
         }
-        dialog.setContentView(fullImageView)
-        loadImageAsync(fullImageView, path)
-        dialog.show()
     }
 
     override fun getItemCount(): Int = messages.size

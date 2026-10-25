@@ -528,6 +528,22 @@ class WebRtcManager(
             localVideoSender = peerConnection?.addTrack(screenVideoTrack, listOf("connectx_stream"))
             createAndSendOffer()
         }
+
+        // Tối ưu âm thanh khi chia sẻ màn hình:
+        // Đổi chế độ sang MODE_NORMAL để Android (đặc biệt là Realme UI / ColorOS trên Realme GT 5)
+        // không tự động bóp nhỏ (duck) âm lượng STREAM_MUSIC khi phát video/nhạc
+        try {
+            audioManager?.mode = AudioManager.MODE_NORMAL
+            audioManager?.isSpeakerphoneOn = true
+            val currentMusicVol = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
+            val maxMusicVol = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
+            if (currentMusicVol < (maxMusicVol * 0.6f).toInt()) {
+                audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, (maxMusicVol * 0.85f).toInt(), 0)
+            }
+            Log.i(TAG, "Optimized media audio mode to MODE_NORMAL for screen share")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error optimizing audio mode for screen share: ${e.message}")
+        }
     }
 
     /**
@@ -540,6 +556,15 @@ class WebRtcManager(
             screenCapturer = null
             screenVideoSource?.dispose()
             screenVideoSource = null
+
+            // Khôi phục chế độ âm thanh thoại tiêu chuẩn
+            try {
+                audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
+                audioManager?.isSpeakerphoneOn = true
+                Log.i(TAG, "Restored audio mode to MODE_IN_COMMUNICATION")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error restoring MODE_IN_COMMUNICATION: ${e.message}")
+            }
 
             // Khôi phục Camera track trên video sender
             val videoSender = localVideoSender

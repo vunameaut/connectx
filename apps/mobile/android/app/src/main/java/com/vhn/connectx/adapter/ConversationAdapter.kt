@@ -10,7 +10,7 @@ import com.vhn.connectx.R
 import com.vhn.connectx.model.Conversation
 
 class ConversationAdapter(
-    private val items: List<Conversation>,
+    private var items: List<Conversation>,
     private val onClick: (Conversation) -> Unit
 ) : RecyclerView.Adapter<ConversationAdapter.ViewHolder>() {
 
@@ -50,4 +50,9 @@ class ConversationAdapter(
     }
 
     override fun getItemCount(): Int = items.size
+
+    fun setConversations(newItems: List<Conversation>) {
+        items = newItems
+        notifyDataSetChanged()
+    }
 }

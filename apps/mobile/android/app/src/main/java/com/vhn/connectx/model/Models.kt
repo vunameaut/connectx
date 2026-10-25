@@ -45,5 +45,19 @@ data class CallHistoryItem(
     val contactName: String,
     val timestamp: String,
     val isVideo: Boolean = false,
-    val isIncoming: Boolean = true
+    val isIncoming: Boolean = true,
+    val status: String = "CONNECTED", // "CONNECTED", "MISSED", "UNREACHABLE", "DECLINED", "CANCELLED"
+    val durationSeconds: Int = 0,
+    val contactEmail: String = ""
 )
+
+data class GroupedCallHistory(
+    val contactName: String,
+    val contactEmail: String,
+    val calls: MutableList<CallHistoryItem> = mutableListOf()
+) {
+    val latestCall: CallHistoryItem get() = calls.first()
+    val totalCount: Int get() = calls.size
+    val hasMissedCall: Boolean get() = calls.any { it.status == "MISSED" || it.status == "UNREACHABLE" }
+}
+

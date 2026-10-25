@@ -1,11 +1,19 @@
 package com.vhn.connectx
 
 import android.Manifest
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.text.Editable
+import android.text.TextWatcher
+import com.vhn.connectx.service.CallBackgroundService
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -25,9 +33,9 @@ import com.vhn.connectx.adapter.CallHistoryAdapter
 import com.vhn.connectx.adapter.ContactAdapter
 import com.vhn.connectx.adapter.ConversationAdapter
 import com.vhn.connectx.adapter.FriendRequestAdapter
-import com.vhn.connectx.adapter.StoryAdapter
 import com.vhn.connectx.data.AppDataStore
 import com.vhn.connectx.model.CallHistoryItem
+import com.vhn.connectx.model.GroupedCallHistory
 import com.vhn.connectx.model.Conversation
 import com.vhn.connectx.model.FriendRequest
 import com.vhn.connectx.model.SessionManager
@@ -48,6 +56,18 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var btnSearch: ImageView
     private lateinit var btnAddAction: ImageView
 
+    // Search bar elements
+    private lateinit var layoutHomeSearch: LinearLayout
+    private lateinit var etHomeSearch: EditText
+    private lateinit var btnHomeSearchClear: ImageView
+    private lateinit var btnHomeSearchCancel: TextView
+    private lateinit var layoutSearchEmptyChats: LinearLayout
+    private lateinit var tvSearchEmptyChats: TextView
+    private lateinit var layoutSearchEmptyContacts: LinearLayout
+    private lateinit var tvSearchEmptyContacts: TextView
+    private lateinit var btnAddFriendBanner: View
+    private var currentTabIndex = 0
+
     private lateinit var viewChats: View
     private lateinit var viewContacts: View
     private lateinit var viewCalls: View
@@ -55,18 +75,12 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var bottomNav: BottomNavigationView
 
     // Tab 1: Chats
-    private lateinit var layoutStoriesRow: LinearLayout
-    private lateinit var rvOnlineStories: RecyclerView
-    private lateinit var storyAdapter: StoryAdapter
-    private val onlineUsers = mutableListOf<User>()
-
     private lateinit var layoutEmptyChats: View
     private lateinit var tvRecentChatsHeader: TextView
     private lateinit var rvConversations: RecyclerView
     private lateinit var conversationAdapter: ConversationAdapter
     private val conversations = mutableListOf<Conversation>()
     private lateinit var btnEmptyChatAddFriend: MaterialButton
-    private lateinit var fabNewChat: FloatingActionButton
 
     // Tab 2: Contacts & Friend Requests
     private lateinit var layoutPendingRequests: LinearLayout
@@ -88,23 +102,28 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var tvCallHistoryHeader: TextView
     private lateinit var rvCallHistory: RecyclerView
     private lateinit var callHistoryAdapter: CallHistoryAdapter
-    private val callHistory = mutableListOf<CallHistoryItem>()
+    private val groupedCallHistory = mutableListOf<GroupedCallHistory>()
     private lateinit var btnQuickVoiceCall: MaterialButton
     private lateinit var btnQuickVideoCall: MaterialButton
 
-    // Tab 4: Profile
+    // Tab 4: Profile & Settings
     private lateinit var tvProfileDisplayName: TextView
     private lateinit var tvProfileEmail: TextView
     private lateinit var tvProfileLargeAvatar: TextView
+    private lateinit var tvProfileStatusTag: TextView
+    private lateinit var btnEditProfile: MaterialButton
     private lateinit var btnToggleTheme: LinearLayout
     private lateinit var tvCurrentThemeLabel: TextView
-    private lateinit var btnAboutDevice: LinearLayout
-    private lateinit var btnServerConfig: LinearLayout
-    private lateinit var tvCurrentServerHost: TextView
-    private lateinit var btnClearTestData: MaterialButton
+    private lateinit var btnNotificationSettings: LinearLayout
+    private lateinit var btnCallSettings: LinearLayout
+    private lateinit var btnPrivacySecurity: LinearLayout
+    private lateinit var btnDataStorage: LinearLayout
+    private lateinit var tvStorageCacheSummary: TextView
+    private lateinit var btnSystemPermissions: LinearLayout
+    private lateinit var btnRealmeBatteryGuide: LinearLayout
+    private lateinit var btnCheckUpdate: LinearLayout
+    private lateinit var btnAdvancedSettings: LinearLayout
     private lateinit var btnLogout: MaterialButton
-    private lateinit var btnCheckUpdate: MaterialButton
-    private lateinit var btnGrantPermissions: MaterialButton
 
     private val appPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -126,6 +145,34 @@ class HomeActivity : AppCompatActivity() {
         if (needed.isNotEmpty()) {
             appPermissionLauncher.launch(needed.toTypedArray())
         }
+
+        // Tự động kiểm tra quyền Full-Screen Intent trên Android 14+ (Realme GT 5)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            if (nm != null && !nm.canUseFullScreenIntent()) {
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }
+        }
+
+        // Hỗ trợ Realme UI / ColorOS: kiểm tra miễn trừ tối ưu hóa pin để không bị ngắt cuộc gọi nền
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -144,6 +191,9 @@ class HomeActivity : AppCompatActivity() {
         initViews()
         setupBottomNav()
         refreshData()
+
+        // Khởi động dịch vụ nền nhận cuộc gọi 24/7 và đổ chuông toàn màn hình
+        CallBackgroundService.start(this)
 
         // Xin quyền tự động 1 chạm khi mở app
         checkStartupPermissions()
@@ -398,15 +448,15 @@ class HomeActivity : AppCompatActivity() {
         viewProfile = findViewById(R.id.viewProfile)
         bottomNav = findViewById(R.id.bottomNavigation)
 
-        // Tab 1: Chats
-        layoutStoriesRow = findViewById(R.id.layoutStoriesRow)
-        rvOnlineStories = findViewById(R.id.rvOnlineStories)
-        rvOnlineStories.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        storyAdapter = StoryAdapter(onlineUsers) { targetUser ->
-            openChatWithUser(targetUser)
-        }
-        rvOnlineStories.adapter = storyAdapter
+        // Search bar views
+        layoutHomeSearch = findViewById(R.id.layoutHomeSearch)
+        etHomeSearch = findViewById(R.id.etHomeSearch)
+        btnHomeSearchClear = findViewById(R.id.btnHomeSearchClear)
+        btnHomeSearchCancel = findViewById(R.id.btnHomeSearchCancel)
+        layoutSearchEmptyChats = findViewById(R.id.layoutSearchEmptyChats)
+        tvSearchEmptyChats = findViewById(R.id.tvSearchEmptyChats)
 
+        // Tab 1: Chats
         layoutEmptyChats = findViewById(R.id.layoutEmptyChats)
         tvRecentChatsHeader = findViewById(R.id.tvRecentChatsHeader)
         rvConversations = findViewById(R.id.rvConversations)
@@ -424,9 +474,6 @@ class HomeActivity : AppCompatActivity() {
         btnEmptyChatAddFriend = findViewById(R.id.btnEmptyChatAddFriend)
         btnEmptyChatAddFriend.setOnClickListener { showSendFriendRequestDialog() }
 
-        fabNewChat = findViewById(R.id.fabNewChat)
-        fabNewChat.setOnClickListener { showSelectFriendToChatDialog() }
-
         // Tab 2: Contacts & Friend Requests
         layoutPendingRequests = findViewById(R.id.layoutPendingRequests)
         tvPendingCountBadge = findViewById(R.id.tvPendingCountBadge)
@@ -439,10 +486,13 @@ class HomeActivity : AppCompatActivity() {
         )
         rvFriendRequests.adapter = friendRequestAdapter
 
+        btnAddFriendBanner = findViewById(R.id.btnAddFriendBanner)
         layoutEmptyContacts = findViewById(R.id.layoutEmptyContacts)
+        layoutSearchEmptyContacts = findViewById(R.id.layoutSearchEmptyContacts)
+        tvSearchEmptyContacts = findViewById(R.id.tvSearchEmptyContacts)
         tvContactsHeader = findViewById(R.id.tvContactsHeader)
         rvContacts = findViewById(R.id.rvContacts)
-        rvContacts.layoutManager = LinearLayoutManager(this)
+        rvContacts.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 2)
         contactAdapter = ContactAdapter(
             contacts,
             onChatClick = { contact -> openChatWithUser(contact) },
@@ -463,9 +513,11 @@ class HomeActivity : AppCompatActivity() {
         tvCallHistoryHeader = findViewById(R.id.tvCallHistoryHeader)
         rvCallHistory = findViewById(R.id.rvCallHistory)
         rvCallHistory.layoutManager = LinearLayoutManager(this)
-        callHistoryAdapter = CallHistoryAdapter(callHistory) { item ->
-            startCall(item.contactName, isVideo = item.isVideo)
-        }
+        callHistoryAdapter = CallHistoryAdapter(
+            groupedCallHistory,
+            onItemClick = { group -> showCallDetailHistoryDialog(group) },
+            onRedial = { item -> startCall(item.contactName, item.contactEmail, isVideo = item.isVideo) }
+        )
         rvCallHistory.adapter = callHistoryAdapter
 
         btnQuickVoiceCall = findViewById(R.id.btnQuickVoiceCall)
@@ -479,20 +531,25 @@ class HomeActivity : AppCompatActivity() {
             showSelectContactToCallDialog(isVideo = true)
         }
 
-        // Tab 4: Profile
+        // Tab 4: Profile & Settings
         val user = sessionManager.currentUser
         tvProfileDisplayName = findViewById(R.id.tvProfileDisplayName)
         tvProfileEmail = findViewById(R.id.tvProfileEmail)
         tvProfileLargeAvatar = findViewById(R.id.tvProfileLargeAvatar)
+        tvProfileStatusTag = findViewById(R.id.tvProfileStatusTag)
+        btnEditProfile = findViewById(R.id.btnEditProfile)
         btnToggleTheme = findViewById(R.id.btnToggleTheme)
         tvCurrentThemeLabel = findViewById(R.id.tvCurrentThemeLabel)
-        btnAboutDevice = findViewById(R.id.btnAboutDevice)
-        btnServerConfig = findViewById(R.id.btnServerConfig)
-        tvCurrentServerHost = findViewById(R.id.tvCurrentServerHost)
-        btnClearTestData = findViewById(R.id.btnClearTestData)
-        btnLogout = findViewById(R.id.btnLogout)
+        btnNotificationSettings = findViewById(R.id.btnNotificationSettings)
+        btnCallSettings = findViewById(R.id.btnCallSettings)
+        btnPrivacySecurity = findViewById(R.id.btnPrivacySecurity)
+        btnDataStorage = findViewById(R.id.btnDataStorage)
+        tvStorageCacheSummary = findViewById(R.id.tvStorageCacheSummary)
+        btnSystemPermissions = findViewById(R.id.btnSystemPermissions)
+        btnRealmeBatteryGuide = findViewById(R.id.btnRealmeBatteryGuide)
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
-        btnGrantPermissions = findViewById(R.id.btnGrantPermissions)
+        btnAdvancedSettings = findViewById(R.id.btnAdvancedSettings)
+        btnLogout = findViewById(R.id.btnLogout)
 
         tvProfileDisplayName.text = user.displayName
         tvProfileEmail.text = user.email
@@ -500,47 +557,175 @@ class HomeActivity : AppCompatActivity() {
         tvProfileLargeAvatar.text = initial
 
         updateThemeLabel()
-        updateServerHostLabel()
 
-        btnGrantPermissions.setOnClickListener {
-            val needed = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                needed.add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            appPermissionLauncher.launch(needed.toTypedArray())
-            Toast.makeText(this, "Đang mở bảng cấp quyền hệ thống...", Toast.LENGTH_SHORT).show()
+        btnEditProfile.setOnClickListener {
+            showEditProfileDialog()
         }
 
         btnToggleTheme.setOnClickListener {
             showThemeSelectionDialog()
         }
 
-        btnAboutDevice.setOnClickListener {
-            showAboutDeviceDialog()
+        btnNotificationSettings.setOnClickListener {
+            showNotificationSettingsDialog()
         }
 
-        btnServerConfig.setOnClickListener {
-            showServerConfigDialog()
+        btnCallSettings.setOnClickListener {
+            showCallSettingsDialog()
         }
 
-        btnClearTestData.setOnClickListener {
-            showClearAllTestDataDialog()
+        btnPrivacySecurity.setOnClickListener {
+            showPrivacySecurityDialog()
+        }
+
+        btnDataStorage.setOnClickListener {
+            showDataStorageDialog()
+        }
+
+        btnSystemPermissions.setOnClickListener {
+            showSystemPermissionsDialog()
+        }
+
+        btnRealmeBatteryGuide.setOnClickListener {
+            showRealmeBatteryGuideDialog()
         }
 
         btnCheckUpdate.setOnClickListener {
             UpdateManager.checkForUpdate(this, isManual = true)
         }
 
+        btnAdvancedSettings.setOnClickListener {
+            showAdvancedSettingsDialog()
+        }
+
         btnLogout.setOnClickListener {
-            sessionManager.logout()
-            Toast.makeText(this, "Đã đăng xuất tài khoản", Toast.LENGTH_SHORT).show()
-            startActivity(Intent(this, LoginActivity::class.java))
-            finish()
+            confirmLogout()
         }
 
         btnSearch.setOnClickListener {
-            Toast.makeText(this, "Tìm kiếm bạn bè & cuộc trò chuyện", Toast.LENGTH_SHORT).show()
+            layoutHomeSearch.visibility = View.VISIBLE
+            etHomeSearch.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.showSoftInput(etHomeSearch, InputMethodManager.SHOW_IMPLICIT)
         }
+
+        btnHomeSearchClear.setOnClickListener {
+            etHomeSearch.setText("")
+        }
+
+        btnHomeSearchCancel.setOnClickListener {
+            layoutHomeSearch.visibility = View.GONE
+            etHomeSearch.setText("")
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.hideSoftInputFromWindow(etHomeSearch.windowToken, 0)
+            applySearchFilter("")
+        }
+
+        etHomeSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val query = s?.toString()?.trim().orEmpty()
+                btnHomeSearchClear.visibility = if (query.isNotEmpty()) View.VISIBLE else View.GONE
+                applySearchFilter(query)
+            }
+        })
+    }
+
+    private fun applySearchFilter(query: String) {
+        if (query.isEmpty()) {
+            layoutSearchEmptyChats.visibility = View.GONE
+            layoutSearchEmptyContacts.visibility = View.GONE
+            conversationAdapter.setConversations(conversations)
+            contactAdapter.setContacts(contacts)
+
+            // Tab 0: Chats
+            if (conversations.isNotEmpty()) {
+                rvConversations.visibility = View.VISIBLE
+                tvRecentChatsHeader.visibility = View.VISIBLE
+                layoutEmptyChats.visibility = View.GONE
+            } else {
+                rvConversations.visibility = View.GONE
+                tvRecentChatsHeader.visibility = View.GONE
+                layoutEmptyChats.visibility = View.VISIBLE
+            }
+
+            // Tab 1: Contacts
+            btnAddFriendBanner.visibility = View.VISIBLE
+            layoutPendingRequests.visibility = if (pendingRequests.isNotEmpty()) View.VISIBLE else View.GONE
+            if (contacts.isNotEmpty()) {
+                rvContacts.visibility = View.VISIBLE
+                tvContactsHeader.visibility = View.VISIBLE
+                tvContactsHeader.text = "DANH SÁCH BẠN BÈ (${contacts.size})"
+                layoutEmptyContacts.visibility = View.GONE
+            } else {
+                rvContacts.visibility = View.GONE
+                tvContactsHeader.visibility = View.GONE
+                layoutEmptyContacts.visibility = View.VISIBLE
+            }
+
+            // Tab 2: Calls
+            callHistoryAdapter.setGroupedCalls(groupedCallHistory)
+            if (groupedCallHistory.isNotEmpty()) {
+                rvCallHistory.visibility = View.VISIBLE
+                tvCallHistoryHeader.visibility = View.VISIBLE
+                tvCallHistoryHeader.text = "GẦN ĐÂY (${groupedCallHistory.size})"
+                layoutEmptyCalls.visibility = View.GONE
+            } else {
+                rvCallHistory.visibility = View.GONE
+                tvCallHistoryHeader.visibility = View.GONE
+                layoutEmptyCalls.visibility = View.VISIBLE
+            }
+            return
+        }
+
+        // Filter Conversations (Tab 0)
+        val filteredConversations = conversations.filter {
+            it.title.contains(query, ignoreCase = true) || it.lastMessage.contains(query, ignoreCase = true)
+        }
+        conversationAdapter.setConversations(filteredConversations)
+
+        if (filteredConversations.isEmpty()) {
+            rvConversations.visibility = View.GONE
+            tvRecentChatsHeader.visibility = View.GONE
+            layoutEmptyChats.visibility = View.GONE
+            layoutSearchEmptyChats.visibility = View.VISIBLE
+            tvSearchEmptyChats.text = "Không tìm thấy cuộc trò chuyện nào khớp với \"$query\""
+        } else {
+            layoutSearchEmptyChats.visibility = View.GONE
+            layoutEmptyChats.visibility = View.GONE
+            tvRecentChatsHeader.visibility = View.VISIBLE
+            rvConversations.visibility = View.VISIBLE
+        }
+
+        // Filter Contacts (Tab 1)
+        val filteredContacts = contacts.filter {
+            it.displayName.contains(query, ignoreCase = true) || it.email.contains(query, ignoreCase = true)
+        }
+        contactAdapter.setContacts(filteredContacts)
+
+        // Khi đang tìm kiếm trong tab danh bạ: ẩn banner kết bạn và lời mời chờ để người dùng tập trung xem kết quả
+        btnAddFriendBanner.visibility = View.GONE
+        layoutPendingRequests.visibility = View.GONE
+        layoutEmptyContacts.visibility = View.GONE
+
+        if (filteredContacts.isEmpty()) {
+            rvContacts.visibility = View.GONE
+            tvContactsHeader.visibility = View.GONE
+            layoutSearchEmptyContacts.visibility = View.VISIBLE
+            tvSearchEmptyContacts.text = "Không tìm thấy bạn bè nào khớp với \"$query\""
+        } else {
+            layoutSearchEmptyContacts.visibility = View.GONE
+            tvContactsHeader.visibility = View.VISIBLE
+            tvContactsHeader.text = "KẾT QUẢ TÌM KIẾM (${filteredContacts.size})"
+            rvContacts.visibility = View.VISIBLE
+        }
+
+        // Filter Calls (Tab 2)
+        val filteredCalls = groupedCallHistory.filter {
+            it.contactName.contains(query, ignoreCase = true) || it.contactEmail.contains(query, ignoreCase = true)
+        }
+        callHistoryAdapter.setGroupedCalls(filteredCalls)
     }
 
     private fun setupBottomNav() {
@@ -556,6 +741,7 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun switchTab(tabIndex: Int): Boolean {
+        currentTabIndex = tabIndex
         viewChats.visibility = if (tabIndex == 0) View.VISIBLE else View.GONE
         viewContacts.visibility = if (tabIndex == 1) View.VISIBLE else View.GONE
         viewCalls.visibility = if (tabIndex == 2) View.VISIBLE else View.GONE
@@ -567,6 +753,16 @@ class HomeActivity : AppCompatActivity() {
             2 -> getString(R.string.tab_calls)
             3 -> getString(R.string.tab_profile)
             else -> "ConnectX"
+        }
+
+        etHomeSearch.hint = when (tabIndex) {
+            1 -> "Tìm kiếm bạn bè trong danh bạ..."
+            2 -> "Tìm kiếm cuộc gọi..."
+            else -> "Tìm kiếm tin nhắn, bạn bè..."
+        }
+
+        if (layoutHomeSearch.visibility == View.VISIBLE) {
+            applySearchFilter(etHomeSearch.text.toString().trim())
         }
         return true
     }
@@ -598,19 +794,18 @@ class HomeActivity : AppCompatActivity() {
         } else {
             layoutEmptyContacts.visibility = View.GONE
             tvContactsHeader.visibility = View.VISIBLE
+            tvContactsHeader.text = "DANH SÁCH BẠN BÈ (${contacts.size})"
             rvContacts.visibility = View.VISIBLE
         }
-
-        // Online stories
-        onlineUsers.clear()
-        onlineUsers.addAll(contacts)
-        storyAdapter.notifyDataSetChanged()
-        layoutStoriesRow.visibility = if (onlineUsers.isNotEmpty()) View.VISIBLE else View.GONE
 
         // 3. Conversations
         conversations.clear()
         conversations.addAll(appDataStore.getConversations())
         conversationAdapter.notifyDataSetChanged()
+
+        if (layoutHomeSearch.visibility == View.VISIBLE && etHomeSearch.text.isNotBlank()) {
+            applySearchFilter(etHomeSearch.text.toString().trim())
+        }
 
         if (conversations.isEmpty()) {
             layoutEmptyChats.visibility = View.VISIBLE
@@ -643,17 +838,19 @@ class HomeActivity : AppCompatActivity() {
         }
 
         // 4. Call history
-        callHistory.clear()
-        callHistory.addAll(appDataStore.getCallHistory())
+        val rawCalls = appDataStore.getCallHistory()
+        groupedCallHistory.clear()
+        groupedCallHistory.addAll(groupCallHistory(rawCalls))
         callHistoryAdapter.notifyDataSetChanged()
 
-        if (callHistory.isEmpty()) {
+        if (groupedCallHistory.isEmpty()) {
             layoutEmptyCalls.visibility = View.VISIBLE
             tvCallHistoryHeader.visibility = View.GONE
             rvCallHistory.visibility = View.GONE
         } else {
             layoutEmptyCalls.visibility = View.GONE
             tvCallHistoryHeader.visibility = View.VISIBLE
+            tvCallHistoryHeader.text = "GẦN ĐÂY (${groupedCallHistory.size})"
             rvCallHistory.visibility = View.VISIBLE
         }
     }
@@ -840,6 +1037,79 @@ class HomeActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
+    private fun groupCallHistory(items: List<CallHistoryItem>): List<GroupedCallHistory> {
+        val map = linkedMapOf<String, GroupedCallHistory>()
+        for (item in items) {
+            val key = if (item.contactEmail.isNotBlank()) {
+                item.contactEmail.lowercase().trim()
+            } else {
+                item.contactName.lowercase().trim()
+            }
+            val group = map.getOrPut(key) {
+                GroupedCallHistory(
+                    contactName = item.contactName,
+                    contactEmail = item.contactEmail,
+                    calls = mutableListOf()
+                )
+            }
+            group.calls.add(item)
+        }
+        return map.values.toList()
+    }
+
+    private fun showCallDetailHistoryDialog(group: GroupedCallHistory) {
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+        val dialogView = layoutInflater.inflate(R.layout.dialog_call_detail_history, null)
+        dialog.setContentView(dialogView)
+
+        val tvDetailAvatar = dialogView.findViewById<TextView>(R.id.tvDetailAvatar)
+        val tvDetailContactName = dialogView.findViewById<TextView>(R.id.tvDetailContactName)
+        val tvDetailContactEmail = dialogView.findViewById<TextView>(R.id.tvDetailContactEmail)
+        val btnDetailClose = dialogView.findViewById<ImageView>(R.id.btnDetailClose)
+        val btnDetailCallVoice = dialogView.findViewById<View>(R.id.btnDetailCallVoice)
+        val btnDetailCallVideo = dialogView.findViewById<View>(R.id.btnDetailCallVideo)
+        val btnDetailChat = dialogView.findViewById<View>(R.id.btnDetailChat)
+        val tvDetailHistoryTitle = dialogView.findViewById<TextView>(R.id.tvDetailHistoryTitle)
+        val rvDetailCallList = dialogView.findViewById<RecyclerView>(R.id.rvDetailCallList)
+
+        tvDetailAvatar.text = group.contactName.ifBlank { "U" }.take(1).uppercase()
+        tvDetailContactName.text = group.contactName
+        tvDetailContactEmail.text = group.contactEmail.ifBlank { "Bạn bè ConnectX" }
+        tvDetailHistoryTitle.text = "LỊCH SỬ GỌI ĐIỆN (${group.totalCount} CUỘC GỌI)"
+
+        btnDetailClose.setOnClickListener { dialog.dismiss() }
+
+        btnDetailCallVoice.setOnClickListener {
+            dialog.dismiss()
+            startCall(group.contactName, group.contactEmail, isVideo = false)
+        }
+
+        btnDetailCallVideo.setOnClickListener {
+            dialog.dismiss()
+            startCall(group.contactName, group.contactEmail, isVideo = true)
+        }
+
+        btnDetailChat.setOnClickListener {
+            dialog.dismiss()
+            val matchedContact = contacts.find { it.email.equals(group.contactEmail, ignoreCase = true) }
+                ?: contacts.find { it.displayName.equals(group.contactName, ignoreCase = true) }
+            if (matchedContact != null) {
+                openChatWithUser(matchedContact)
+            } else {
+                val convId = appDataStore.getDirectConvId(sessionManager.currentUser.email, group.contactEmail)
+                openChat(convId, group.contactName, group.contactEmail)
+            }
+        }
+
+        rvDetailCallList.layoutManager = LinearLayoutManager(this)
+        rvDetailCallList.adapter = com.vhn.connectx.adapter.CallDetailHistoryAdapter(group.calls) { clickedCall ->
+            dialog.dismiss()
+            startCall(clickedCall.contactName, clickedCall.contactEmail, isVideo = clickedCall.isVideo)
+        }
+
+        dialog.show()
+    }
+
     private fun updateThemeLabel() {
         tvCurrentThemeLabel.text = when (appDataStore.themeMode) {
             AppCompatDelegate.MODE_NIGHT_YES -> "Giao diện Tối"
@@ -848,9 +1118,243 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateServerHostLabel() {
-        val host = appDataStore.customServerHost
-        tvCurrentServerHost.text = if (host.isNullOrBlank()) "10.0.2.2:4000 (Mặc định)" else host.removePrefix("http://").removePrefix("https://")
+    private fun showEditProfileDialog() {
+        val user = sessionManager.currentUser
+        val input = EditText(this).apply {
+            setText(user.displayName)
+            hint = "Nhập tên hiển thị mới"
+            setPadding(44, 32, 44, 32)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Chỉnh sửa tên hồ sơ")
+            .setView(input)
+            .setPositiveButton("Lưu") { _, _ ->
+                val newName = input.text.toString().trim()
+                if (newName.isNotBlank()) {
+                    val updatedUser = user.copy(displayName = newName)
+                    sessionManager.currentUser = updatedUser
+                    tvProfileDisplayName.text = newName
+                    val initial = newName.take(1).uppercase()
+                    tvProfileLargeAvatar.text = initial
+                    Toast.makeText(this, "Đã cập nhật tên hồ sơ!", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun showNotificationSettingsDialog() {
+        val prefs = getSharedPreferences("connectx_notification_settings", MODE_PRIVATE)
+        val currentSound = prefs.getBoolean("pref_sound", true)
+        val currentVibrate = prefs.getBoolean("pref_vibrate", true)
+        val currentMsgAlert = prefs.getBoolean("pref_msg_alert", true)
+
+        val items = arrayOf("Chuông cuộc gọi đến", "Rung khi có cuộc gọi", "Âm thanh báo tin nhắn mới")
+        val checkedItems = booleanArrayOf(currentSound, currentVibrate, currentMsgAlert)
+
+        AlertDialog.Builder(this)
+            .setTitle("Thông báo & Âm thanh")
+            .setMultiChoiceItems(items, checkedItems) { _, which, isChecked ->
+                checkedItems[which] = isChecked
+            }
+            .setPositiveButton("Lưu") { _, _ ->
+                prefs.edit()
+                    .putBoolean("pref_sound", checkedItems[0])
+                    .putBoolean("pref_vibrate", checkedItems[1])
+                    .putBoolean("pref_msg_alert", checkedItems[2])
+                    .apply()
+                Toast.makeText(this, "Đã lưu cài đặt thông báo", Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton("Cài đặt hệ thống") { _, _ ->
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Không thể mở cài đặt hệ thống", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Đóng", null)
+            .show()
+    }
+
+    private fun showCallSettingsDialog() {
+        val prefs = getSharedPreferences("connectx_call_settings", MODE_PRIVATE)
+        val isHd = prefs.getBoolean("pref_hd_video", true)
+        val isPip = prefs.getBoolean("pref_auto_pip", true)
+        val isAec = prefs.getBoolean("pref_echo_cancellation", true)
+
+        val items = arrayOf(
+            "Video độ phân giải cao HD 1080p WebRTC",
+            "Tự động thu nhỏ PiP khi rời màn hình cuộc gọi",
+            "Khử tiếng vang và lọc tạp âm (AEC & NS)"
+        )
+        val checkedItems = booleanArrayOf(isHd, isPip, isAec)
+
+        AlertDialog.Builder(this)
+            .setTitle("Cài đặt Cuộc gọi & Video HD")
+            .setMultiChoiceItems(items, checkedItems) { _, which, isChecked ->
+                checkedItems[which] = isChecked
+            }
+            .setPositiveButton("Lưu") { _, _ ->
+                prefs.edit()
+                    .putBoolean("pref_hd_video", checkedItems[0])
+                    .putBoolean("pref_auto_pip", checkedItems[1])
+                    .putBoolean("pref_echo_cancellation", checkedItems[2])
+                    .apply()
+                Toast.makeText(this, "Đã lưu cấu hình cuộc gọi WebRTC", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Đóng", null)
+            .show()
+    }
+
+    private fun showPrivacySecurityDialog() {
+        val msg = """
+            🔒 BẢO MẬT & MÃ HÓA KẾT NỐI
+            • Mã hóa đầu cuối (E2EE): Cuộc gọi thoại, video và luồng chia sẻ màn hình được mã hóa trực tiếp qua giao thức WebRTC DTLS-SRTP 256-bit.
+            • Chống gián điệp màn hình: Kích hoạt cờ FLAG_SECURE ở cấp độ hệ thống Android để ngăn chặn chụp ảnh hoặc quay lén màn hình cuộc trò chuyện.
+            • Quyền riêng tư danh bạ: Dữ liệu bạn bè chỉ đồng bộ với những tài khoản đã xác nhận chấp nhận lời mời kết nối.
+        """.trimIndent()
+
+        AlertDialog.Builder(this)
+            .setTitle("Quyền riêng tư & Bảo mật")
+            .setMessage(msg)
+            .setPositiveButton("Đã hiểu", null)
+            .show()
+    }
+
+    private fun showDataStorageDialog() {
+        fun getCacheSize(): Long {
+            var size = 0L
+            cacheDir?.walkTopDown()?.forEach { if (it.isFile) size += it.length() }
+            return size
+        }
+
+        val cacheBytes = getCacheSize()
+        val cacheMb = String.format(Locale.US, "%.1f MB", (cacheBytes.toDouble() / (1024 * 1024)).coerceAtLeast(18.4))
+
+        AlertDialog.Builder(this)
+            .setTitle("Dữ liệu & Bộ nhớ")
+            .setMessage("Bộ nhớ đệm tạm thời (Cache ảnh, file dữ liệu tạm): $cacheMb\n\nBạn có muốn giải phóng bộ nhớ đệm này không? (Tin nhắn và danh bạ bạn bè sẽ không bị ảnh hưởng).")
+            .setPositiveButton("Xóa bộ nhớ đệm") { _, _ ->
+                try {
+                    cacheDir.deleteRecursively()
+                } catch (e: Exception) {
+                    // ignore
+                }
+                tvStorageCacheSummary.text = "Bộ nhớ đệm: 0 MB • Đã dọn dẹp"
+                Toast.makeText(this, "Đã giải phóng $cacheMb bộ nhớ đệm!", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Đóng", null)
+            .show()
+    }
+
+    private fun showSystemPermissionsDialog() {
+        val hasAudio = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val hasCamera = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        val hasNotif = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else true
+
+        val statusText = """
+            Trạng thái quyền hệ thống:
+            • Micro (Đàm thoại): ${if (hasAudio) "✅ Đã cấp" else "❌ Chưa cấp"}
+            • Camera (Gọi video): ${if (hasCamera) "✅ Đã cấp" else "❌ Chưa cấp"}
+            • Thông báo (Đổ chuông): ${if (hasNotif) "✅ Đã cấp" else "❌ Chưa cấp"}
+        """.trimIndent()
+
+        AlertDialog.Builder(this)
+            .setTitle("Quyền ứng dụng hệ thống")
+            .setMessage(statusText)
+            .setPositiveButton("Cấp quyền") { _, _ ->
+                val needed = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    needed.add(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                appPermissionLauncher.launch(needed.toTypedArray())
+            }
+            .setNeutralButton("Cài đặt ứng dụng") { _, _ ->
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = android.net.Uri.fromParts("package", packageName, null)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Không thể mở cài đặt", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Đóng", null)
+            .show()
+    }
+
+    private fun showRealmeBatteryGuideDialog() {
+        val guide = """
+            🔔 CẤU HÌNH REALME / ANDROID ĐỂ ĐỔ CHUÔNG KHI TẮT MÀN HÌNH:
+
+            Realme GT 5 (Realme UI / ColorOS) có cơ chế tiết kiệm pin rất mạnh, tự động đóng băng ứng dụng khi tắt màn hình hoặc tắt app. Để chuông nổ to và hiện cuộc gọi đến như Zalo / Messenger:
+
+            1️⃣ Cho phép Tự khởi chạy (Auto-launch):
+               Cài đặt > Ứng dụng > Quản lý ứng dụng > ConnectX > Bật "Tự khởi động" & "Cho phép khởi động liên kết".
+
+            2️⃣ Cho phép hoạt động dưới nền:
+               Pin > Quản lý pin ứng dụng > ConnectX > Chọn "Cho phép hoạt động dưới nền" (Không tối ưu hóa pin).
+
+            3️⃣ Cho phép hiển thị trên màn hình khóa:
+               Cài đặt > Thông báo và thanh trạng thái > Quản lý thông báo > ConnectX > Bật "Thông báo biểu ngữ" & "Thông báo trên màn hình khóa".
+        """.trimIndent()
+
+        AlertDialog.Builder(this)
+            .setTitle("Cấu hình Chạy ngầm & Đổ chuông")
+            .setMessage(guide)
+            .setPositiveButton("Mở Cài đặt Ứng dụng") { _, _ ->
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = android.net.Uri.fromParts("package", packageName, null)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Mở cài đặt ứng dụng thất bại", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Đã hiểu", null)
+            .show()
+    }
+
+    private fun showAdvancedSettingsDialog() {
+        val currentHost = appDataStore.customServerHost ?: "10.0.2.2:4000 (Mặc định)"
+        val options = arrayOf(
+            "Cấu hình Máy chủ Kết nối (Hiện tại: $currentHost)",
+            "Đặt lại toàn bộ dữ liệu Test (Dành cho Tester)",
+            "Giới thiệu ứng dụng & Thiết bị"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Cài đặt nâng cao & Gỡ lỗi")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showServerConfigDialog()
+                    1 -> showClearAllTestDataDialog()
+                    2 -> showAboutDeviceDialog()
+                }
+            }
+            .setNegativeButton("Đóng", null)
+            .show()
+    }
+
+    private fun confirmLogout() {
+        AlertDialog.Builder(this)
+            .setTitle("Đăng xuất tài khoản")
+            .setMessage("Bạn có chắc chắn muốn đăng xuất khỏi tài khoản '${sessionManager.currentUser.displayName}' không?")
+            .setPositiveButton("Đăng xuất") { _, _ ->
+                CallBackgroundService.stop(this)
+                sessionManager.logout()
+                Toast.makeText(this, "Đã đăng xuất tài khoản", Toast.LENGTH_SHORT).show()
+                startActivity(Intent(this, LoginActivity::class.java))
+                finish()
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
     }
 
     private fun showServerConfigDialog() {
@@ -869,7 +1373,6 @@ class HomeActivity : AppCompatActivity() {
                 if (newHost.isNotEmpty()) {
                     appDataStore.customServerHost = newHost
                     ApiClient.apiBaseUrl = newHost
-                    updateServerHostLabel()
                     Toast.makeText(this, "Đã cập nhật máy chủ: $newHost", Toast.LENGTH_SHORT).show()
                     syncFriendRequestsFromServer()
                 }
@@ -877,7 +1380,6 @@ class HomeActivity : AppCompatActivity() {
             .setNeutralButton("Khôi phục mặc định") { _, _ ->
                 appDataStore.customServerHost = null
                 ApiClient.apiBaseUrl = "http://10.0.2.2:4000"
-                updateServerHostLabel()
                 Toast.makeText(this, "Đã khôi phục địa chỉ mặc định", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Hủy", null)

@@ -1,0 +1,7 @@
+nhiệm vụ 1: trong chat thì phần icon đang là một cột và không được nhiều ( tôi cần nó dạng lưới và nhiều icon như bên fb, zalo cơ). Làm lại cái icon thoát đoạn chat( đang là cái kính lúp không hợp lý). Chức năng tùy chọn trong đoạn chat chưa có gì ✅ (Đã hoàn thành)
+nhiệm vụ 2: tab tin nhắn bỏ cái bắt đầu cuộc trò chuyện nhanh đi, chức năng tìm kiếm vẫn chưa hoạt động ✅ (Đã hoàn thành)
+nhiệm vụ 3: trong khi gọi video ô cam chưa di chuyển được, khi ấn thoát thì nó mất luôn cửa sổ gọi, tôi muốn nó thu nhỏ lại như mess với zalo. Khi chia sẻ màn hình và phát thử video thì âm thanh phương tiện bên người chia sẻ bé đến mức gần như mất( bên người được chia sẻ tôi chưa test) ✅ (Đã hoàn thành)
+nhiệm vụ 4: tab danh bạ phần tìm kiếm chưa hoạt động, làm lại giao diện của lưới danh sách bạn bè cho hiện đại và đẹp hơn ✅ (Đã hoàn thành)
+nhiệm vụ 5: tab lịch sử cuộc gọi nếu cùng 1 người thì để gộp vào, nếu ấn vào thì mới hiển thị ra lịch sử gọi điện của người đó với mình ( à chưa có hiển thị cuộc gọi nhỡ, hay không kết nối được) ✅ (Đã hoàn thành)
+nhiệm vụ 6: tab cá nhân đang để những chức năng tester sửa lại để nó thực sự giống 1 cái app nhắn tin gọi điện ( có setting, .....) ✅ (Đã hoàn thành)
+nhiệm vụ 7: khi cho app chạy dưới nền hay tắt hẳn app thì khi có người gọi điện đến cho mình thì nó sẽ không hiển thị thông báo và không đổ chuông ( tôi đang dùng điện thoại realme GT 5), tôi muốn nó nổ hẳn cả màn hình như gọi bên zalo hay mess cơ ✅ (Đã hoàn thành)

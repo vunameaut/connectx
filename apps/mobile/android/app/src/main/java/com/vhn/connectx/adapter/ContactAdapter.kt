@@ -10,7 +10,7 @@ import com.vhn.connectx.R
 import com.vhn.connectx.model.User
 
 class ContactAdapter(
-    private val items: List<User>,
+    private var items: List<User>,
     private val onChatClick: (User) -> Unit,
     private val onCallClick: (User) -> Unit,
     private val onDeleteClick: (User) -> Unit
@@ -20,8 +20,8 @@ class ContactAdapter(
         val tvAvatar: TextView = view.findViewById(R.id.tvContactAvatar)
         val tvName: TextView = view.findViewById(R.id.tvContactName)
         val tvEmail: TextView = view.findViewById(R.id.tvContactEmail)
-        val btnQuickChat: ImageView = view.findViewById(R.id.btnQuickChat)
-        val btnQuickCall: ImageView = view.findViewById(R.id.btnQuickCall)
+        val btnQuickChat: View = view.findViewById(R.id.btnQuickChat)
+        val btnQuickCall: View = view.findViewById(R.id.btnQuickCall)
         val btnDeleteContact: ImageView = view.findViewById(R.id.btnDeleteContact)
     }
 
@@ -48,4 +48,9 @@ class ContactAdapter(
     }
 
     override fun getItemCount(): Int = items.size
+
+    fun setContacts(newItems: List<User>) {
+        items = newItems
+        notifyDataSetChanged()
+    }
 }

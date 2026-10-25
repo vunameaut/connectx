@@ -9,16 +9,29 @@
     android:paddingHorizontal="16dp"
     android:background="?android:attr/selectableItemBackground">
 
-    <TextView
-        android:id="@+id/tvHistoryAvatar"
+    <FrameLayout
         android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:background="@drawable/bg_card_secondary"
-        android:text="C"
-        android:textColor="@color/white"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:gravity="center" />
+        android:layout_height="48dp">
+
+        <TextView
+            android:id="@+id/tvHistoryAvatar"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_card_secondary"
+            android:text="C"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+
+        <ImageView
+            android:id="@+id/ivHistoryBadge"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_gravity="bottom|end"
+            android:src="@drawable/ic_calls"
+            app:tint="@color/status_online" />
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="0dp"
@@ -27,14 +40,35 @@
         android:orientation="vertical"
         android:layout_marginStart="14dp">
 
-        <TextView
-            android:id="@+id/tvHistoryName"
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Lê Văn C"
-            android:textColor="@color/text_primary"
-            android:textSize="15sp"
-            android:textStyle="bold" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvHistoryName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Lê Văn C"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvCallCountBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_badge"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="1dp"
+                android:text="3"
+                android:textColor="@color/white"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -45,9 +79,9 @@
 
             <ImageView
                 android:id="@+id/ivCallTypeIcon"
-                android:layout_width="15dp"
-                android:layout_height="15dp"
-                android:src="@drawable/ic_videocall"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:src="@drawable/ic_calls"
                 app:tint="@color/status_online" />
 
             <TextView
@@ -61,11 +95,24 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Info / Details Icon Button -->
+    <ImageView
+        android:id="@+id/btnViewCallDetails"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:padding="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_more_vert"
+        app:tint="@color/text_muted"
+        android:contentDescription="Chi tiết cuộc gọi" />
+
+    <!-- Redial Action Button -->
     <ImageView
         android:id="@+id/btnRedial"
         android:layout_width="40dp"
         android:layout_height="40dp"
         android:padding="10dp"
+        android:layout_marginStart="4dp"
         android:background="@drawable/bg_card_rounded"
         android:src="@drawable/ic_calls"
         app:tint="@color/status_online"

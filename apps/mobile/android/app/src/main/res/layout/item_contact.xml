@@ -1,95 +1,191 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
-    android:paddingVertical="12dp"
-    android:paddingHorizontal="16dp"
-    android:background="?android:attr/selectableItemBackground">
-
-    <FrameLayout
-        android:layout_width="48dp"
-        android:layout_height="48dp">
-
-        <TextView
-            android:id="@+id/tvContactAvatar"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="@drawable/bg_card_secondary"
-            android:text="B"
-            android:textColor="@color/white"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:gravity="center" />
-
-        <View
-            android:layout_width="12dp"
-            android:layout_height="12dp"
-            android:layout_gravity="bottom|end"
-            android:background="@drawable/bg_status_online" />
-    </FrameLayout>
+    android:layout_margin="6dp"
+    app:cardCornerRadius="18dp"
+    app:cardElevation="3dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="@color/border_subtle"
+    app:cardBackgroundColor="@color/bg_card"
+    android:foreground="?android:attr/selectableItemBackground">
 
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
         android:orientation="vertical"
-        android:layout_marginStart="14dp">
+        android:padding="14dp"
+        android:gravity="center_horizontal">
 
+        <!-- Top Row: Online Pill & Delete Menu -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <!-- Online Badge -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_badge"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp">
+
+                <View
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:background="@drawable/bg_status_online" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Online"
+                    android:textColor="@color/status_online"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Delete / Unfriend Icon -->
+            <ImageView
+                android:id="@+id/btnDeleteContact"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:padding="5dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_close"
+                app:tint="@color/text_muted"
+                android:contentDescription="Xóa bạn bè" />
+        </RelativeLayout>
+
+        <!-- Avatar with Aura Ring -->
+        <FrameLayout
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginTop="6dp">
+
+            <View
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@drawable/bg_story_ring" />
+
+            <TextView
+                android:id="@+id/tvContactAvatar"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_card_secondary"
+                android:text="B"
+                android:textColor="@color/white"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:gravity="center" />
+        </FrameLayout>
+
+        <!-- Friend Name -->
         <TextView
             android:id="@+id/tvContactName"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:text="Trần Thị B"
             android:textColor="@color/text_primary"
-            android:textSize="15sp"
-            android:textStyle="bold" />
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end" />
 
+        <!-- Friend Email -->
         <TextView
             android:id="@+id/tvContactEmail"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
             android:text="b.tran@example.com"
             android:textColor="@color/text_muted"
-            android:textSize="12sp"
-            android:layout_marginTop="2dp" />
+            android:textSize="11sp"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- Quick Action Buttons: Chat & Call -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <!-- Chat Button -->
+            <LinearLayout
+                android:id="@+id/btnQuickChat"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_card_rounded"
+                android:backgroundTint="@color/colorPrimary"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:paddingHorizontal="4dp"
+                android:clickable="true"
+                android:focusable="true">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_chat"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Chat"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="6dp"
+                android:layout_height="1dp" />
+
+            <!-- Call Button -->
+            <LinearLayout
+                android:id="@+id/btnQuickCall"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_card_rounded"
+                android:backgroundTint="@color/bg_card_secondary"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:paddingHorizontal="4dp"
+                android:clickable="true"
+                android:focusable="true">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_calls"
+                    app:tint="@color/call_green" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Gọi"
+                    android:textColor="@color/call_green"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
-
-    <!-- Quick Action: Chat -->
-    <ImageView
-        android:id="@+id/btnQuickChat"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:padding="9dp"
-        android:background="@drawable/bg_card_rounded"
-        android:src="@drawable/ic_chat"
-        app:tint="@color/colorPrimaryLight"
-        android:contentDescription="Nhắn tin" />
-
-    <!-- Quick Action: Call -->
-    <ImageView
-        android:id="@+id/btnQuickCall"
-        android:layout_width="38dp"
-        android:layout_height="38dp"
-        android:padding="8dp"
-        android:layout_marginStart="8dp"
-        android:background="@drawable/bg_card_rounded"
-        android:src="@drawable/ic_calls"
-        app:tint="@color/status_online"
-        android:contentDescription="Gọi điện" />
-
-    <!-- Action: Delete Contact -->
-    <ImageView
-        android:id="@+id/btnDeleteContact"
-        android:layout_width="38dp"
-        android:layout_height="38dp"
-        android:padding="8dp"
-        android:layout_marginStart="8dp"
-        android:background="@drawable/bg_card_rounded"
-        android:src="@drawable/ic_delete"
-        app:tint="@color/call_red"
-        android:contentDescription="Xóa bạn bè" />
-
-</LinearLayout>
+</com.google.android.material.card.MaterialCardView>

@@ -24,6 +24,8 @@ class AppDataStore(context: Context) {
         private const val KEY_CALL_HISTORY = "key_call_history"
         private const val KEY_THEME_MODE = "key_theme_mode"
         private const val KEY_SERVER_API_HOST = "key_server_api_host"
+        private const val KEY_NICKNAMES = "key_contact_nicknames"
+        private const val KEY_MUTED_CHATS = "key_muted_chats"
 
         @Volatile
         private var instance: AppDataStore? = null
@@ -233,6 +235,61 @@ class AppDataStore(context: Context) {
         prefs.edit().putString(KEY_MESSAGES_PREFIX + convId, gson.toJson(list)).apply()
     }
 
+    fun clearMessages(convId: String) {
+        prefs.edit().remove(KEY_MESSAGES_PREFIX + convId).apply()
+        val list = getConversations()
+        val index = list.indexOfFirst { it.id == convId }
+        if (index >= 0) {
+            val conv = list[index]
+            list[index] = conv.copy(lastMessage = "Đã xóa lịch sử trò chuyện", timestamp = "Vừa xong")
+            prefs.edit().putString(KEY_CONVERSATIONS, gson.toJson(list)).apply()
+        }
+    }
+
+    fun getNickname(email: String): String? {
+        if (email.isBlank()) return null
+        val json = prefs.getString(KEY_NICKNAMES, null) ?: return null
+        val type = object : TypeToken<Map<String, String>>() {}.type
+        val map: Map<String, String> = try {
+            gson.fromJson(json, type) ?: emptyMap()
+        } catch (e: Exception) {
+            emptyMap()
+        }
+        return map[email.lowercase().trim()]
+    }
+
+    fun setNickname(email: String, nickname: String) {
+        if (email.isBlank()) return
+        val json = prefs.getString(KEY_NICKNAMES, null)
+        val type = object : TypeToken<MutableMap<String, String>>() {}.type
+        val map: MutableMap<String, String> = try {
+            gson.fromJson(json, type) ?: mutableMapOf()
+        } catch (e: Exception) {
+            mutableMapOf()
+        }
+        if (nickname.isBlank()) {
+            map.remove(email.lowercase().trim())
+        } else {
+            map[email.lowercase().trim()] = nickname.trim()
+        }
+        prefs.edit().putString(KEY_NICKNAMES, gson.toJson(map)).apply()
+    }
+
+    fun isChatMuted(convId: String): Boolean {
+        val mutedSet = prefs.getStringSet(KEY_MUTED_CHATS, null) ?: return false
+        return mutedSet.contains(convId)
+    }
+
+    fun setChatMuted(convId: String, isMuted: Boolean) {
+        val currentSet = prefs.getStringSet(KEY_MUTED_CHATS, null)?.toMutableSet() ?: mutableSetOf()
+        if (isMuted) {
+            currentSet.add(convId)
+        } else {
+            currentSet.remove(convId)
+        }
+        prefs.edit().putStringSet(KEY_MUTED_CHATS, currentSet).apply()
+    }
+
     // --- CALL HISTORY ---
     fun getCallHistory(): MutableList<CallHistoryItem> {
         val json = prefs.getString(KEY_CALL_HISTORY, null) ?: return mutableListOf()
@@ -248,6 +305,20 @@ class AppDataStore(context: Context) {
         val list = getCallHistory()
         list.add(0, item)
         prefs.edit().putString(KEY_CALL_HISTORY, gson.toJson(list)).apply()
+    }
+
+    fun updateCallHistoryStatus(callId: String, status: String, durationSeconds: Int = 0) {
+        val list = getCallHistory()
+        val index = list.indexOfFirst { it.id == callId }
+        if (index >= 0) {
+            val item = list[index]
+            val updated = item.copy(
+                status = status,
+                durationSeconds = if (durationSeconds > 0) durationSeconds else item.durationSeconds
+            )
+            list[index] = updated
+            prefs.edit().putString(KEY_CALL_HISTORY, gson.toJson(list)).apply()
+        }
     }
 
     // --- SERVER API HOST ---
