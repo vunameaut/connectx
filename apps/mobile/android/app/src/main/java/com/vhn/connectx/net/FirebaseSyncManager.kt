@@ -15,6 +15,59 @@ object FirebaseSyncManager {
     }
 
     /**
+     * Save/Update User Profile to Cloud Firestore (collection "users").
+     * Đảm bảo tên tài khoản Google (displayName), email, avatarUrl luôn được đồng bộ lên Cloud để bạn bè lấy đúng tên.
+     */
+    fun saveUserProfile(user: com.vhn.connectx.model.User) {
+        val cleanEmail = user.email.trim().lowercase()
+        if (cleanEmail.isBlank()) return
+        val data = hashMapOf(
+            "id" to user.id,
+            "displayName" to user.displayName,
+            "email" to cleanEmail,
+            "avatarUrl" to user.avatarUrl,
+            "updatedAt" to System.currentTimeMillis()
+        )
+        firestore.collection("users")
+            .document(cleanEmail)
+            .set(data, com.google.firebase.firestore.SetOptions.merge())
+            .addOnSuccessListener {
+                Log.i(TAG, "Saved user profile to Firestore: $cleanEmail -> ${user.displayName}")
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Failed saving user profile to Firestore: ${e.message}")
+            }
+    }
+
+    /**
+     * Lấy thông tin tài khoản Google của người dùng từ Cloud Firestore (collection "users").
+     */
+    fun getUserProfile(email: String, onResult: (com.vhn.connectx.model.User?) -> Unit) {
+        val cleanEmail = email.trim().lowercase()
+        if (cleanEmail.isBlank()) {
+            onResult(null)
+            return
+        }
+        firestore.collection("users")
+            .document(cleanEmail)
+            .get()
+            .addOnSuccessListener { doc ->
+                if (doc.exists()) {
+                    val displayName = doc.getString("displayName")?.trim()?.ifBlank { null }
+                        ?: cleanEmail.substringBefore("@")
+                    val id = doc.getString("id") ?: "u_${cleanEmail.hashCode()}"
+                    val avatarUrl = doc.getString("avatarUrl") ?: ""
+                    onResult(com.vhn.connectx.model.User(id = id, displayName = displayName, email = cleanEmail, avatarUrl = avatarUrl, isOnline = true))
+                } else {
+                    onResult(null)
+                }
+            }
+            .addOnFailureListener {
+                onResult(null)
+            }
+    }
+
+    /**
      * Send Friend Request to Cloud Firestore so the recipient receives it instantly online.
      */
     fun sendFriendRequest(req: FriendRequest, onComplete: (Boolean) -> Unit) {
@@ -24,6 +77,7 @@ object FirebaseSyncManager {
             "senderName" to req.senderName,
             "senderEmail" to req.senderEmail.trim().lowercase(),
             "receiverEmail" to req.receiverEmail.trim().lowercase(),
+            "receiverName" to req.receiverName,
             "timestamp" to req.timestamp,
             "status" to req.status,
             "createdTime" to System.currentTimeMillis()
@@ -74,6 +128,7 @@ object FirebaseSyncManager {
                             val senderName = doc.getString("senderName") ?: ""
                             val senderEmail = doc.getString("senderEmail") ?: ""
                             val receiverEmail = doc.getString("receiverEmail") ?: ""
+                            val receiverName = doc.getString("receiverName") ?: ""
                             val timestamp = doc.getString("timestamp") ?: ""
                             val status = doc.getString("status") ?: "PENDING"
 
@@ -84,7 +139,8 @@ object FirebaseSyncManager {
                                 senderEmail = senderEmail,
                                 receiverEmail = receiverEmail,
                                 timestamp = timestamp,
-                                status = status
+                                status = status,
+                                receiverName = receiverName
                             )
 
                             if (status == "PENDING") {
@@ -120,6 +176,7 @@ object FirebaseSyncManager {
                         for (doc in snapshot.documents) {
                             val id = doc.getString("id") ?: doc.id
                             val senderId = doc.getString("senderId") ?: ""
+                            val senderName = doc.getString("senderName") ?: ""
                             val senderEmail = doc.getString("senderEmail") ?: ""
                             val receiverEmail = doc.getString("receiverEmail") ?: ""
                             val receiverName = doc.getString("receiverName") ?: receiverEmail.substringBefore("@")
@@ -131,11 +188,12 @@ object FirebaseSyncManager {
                                     FriendRequest(
                                         id = id,
                                         senderId = senderId,
-                                        senderName = receiverName,
+                                        senderName = senderName,
                                         senderEmail = senderEmail,
                                         receiverEmail = receiverEmail,
                                         timestamp = timestamp,
-                                        status = status
+                                        status = status,
+                                        receiverName = receiverName
                                     )
                                 )
                             }
@@ -209,6 +267,7 @@ object FirebaseSyncManager {
                     if (status == "ACCEPTED" && senderEmail.isNotBlank()) {
                         onContactFound(com.vhn.connectx.model.User(id = senderId, displayName = senderName, email = senderEmail, isOnline = true))
                     } else if (status == "PENDING" && senderEmail.isNotBlank()) {
+                        val receiverName = doc.getString("receiverName") ?: ""
                         onPendingFound(
                             FriendRequest(
                                 id = id,
@@ -217,7 +276,8 @@ object FirebaseSyncManager {
                                 senderEmail = senderEmail,
                                 receiverEmail = cleanEmail,
                                 timestamp = timestamp,
-                                status = status
+                                status = status,
+                                receiverName = receiverName
                             )
                         )
                     }

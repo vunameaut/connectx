@@ -151,19 +151,27 @@ class LoginActivity : AppCompatActivity() {
                     val firebaseUser = auth.currentUser
                     firebaseUser?.getIdToken(true)?.addOnCompleteListener { tokenTask ->
                         val firebaseIdToken = tokenTask.result?.token ?: ""
+                        val realGoogleName = account.displayName?.trim()?.ifBlank { null }
+                            ?: firebaseUser.displayName?.trim()?.ifBlank { null }
+                            ?: (account.email ?: "google@connectx.app").substringBefore("@")
+                        val avatar = account.photoUrl?.toString() ?: firebaseUser.photoUrl?.toString() ?: ""
                         syncWithBackend(
                             uid = firebaseUser.uid,
-                            displayName = account.displayName ?: "Người dùng Google",
+                            displayName = realGoogleName,
                             email = account.email ?: "google@connectx.app",
-                            firebaseIdToken = firebaseIdToken
+                            firebaseIdToken = firebaseIdToken,
+                            avatarUrl = avatar
                         )
                     }
                 } else {
                     // Fallback to authenticated account profile
+                    val realGoogleName = account.displayName?.trim()?.ifBlank { null }
+                        ?: (account.email ?: "user@gmail.com").substringBefore("@")
                     handleDirectAuth(
                         uid = account.id ?: "google_uid",
-                        name = account.displayName ?: "Người dùng Google",
-                        email = account.email ?: "user@gmail.com"
+                        name = realGoogleName,
+                        email = account.email ?: "user@gmail.com",
+                        avatarUrl = account.photoUrl?.toString() ?: ""
                     )
                 }
             }
@@ -222,13 +230,17 @@ class LoginActivity : AppCompatActivity() {
         uid: String,
         displayName: String,
         email: String,
-        firebaseIdToken: String
+        firebaseIdToken: String,
+        avatarUrl: String = ""
     ) {
         tvStatus.text = "Đang hoàn tất kết nối..."
 
-        val user = User(id = uid, displayName = displayName, email = email)
+        val user = User(id = uid, displayName = displayName, email = email, avatarUrl = avatarUrl)
         sessionManager.currentUser = user
         sessionManager.firebaseToken = firebaseIdToken
+
+        // Upload profile to Cloud Firestore so friends and contacts can see the real Google account name
+        com.vhn.connectx.net.FirebaseSyncManager.saveUserProfile(user)
 
         ApiClient.exchangeFirebaseToken(this, firebaseIdToken) { _, _, _ ->
             setLoading(false)
@@ -237,10 +249,11 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleDirectAuth(uid: String, name: String, email: String) {
-        val user = User(id = uid, displayName = name, email = email)
+    private fun handleDirectAuth(uid: String, name: String, email: String, avatarUrl: String = "") {
+        val user = User(id = uid, displayName = name, email = email, avatarUrl = avatarUrl)
         sessionManager.currentUser = user
         sessionManager.supabaseToken = "session_$uid"
+        com.vhn.connectx.net.FirebaseSyncManager.saveUserProfile(user)
         setLoading(false)
         Toast.makeText(this, "Xin chào $name!", Toast.LENGTH_SHORT).show()
         navigateToHome()

@@ -104,6 +104,15 @@ class ChatActivity : AppCompatActivity() {
         val storedNick = appDataStore.getNickname(contactEmail)
         if (!storedNick.isNullOrBlank()) {
             contactTitle = storedNick
+        } else if (contactTitle.equals(sessionManager.currentUser.displayName, ignoreCase = true)) {
+            val contactInDb = appDataStore.getContacts().find { it.email.equals(contactEmail, ignoreCase = true) }
+            contactTitle = if (contactInDb != null && !contactInDb.displayName.equals(sessionManager.currentUser.displayName, ignoreCase = true)) {
+                contactInDb.displayName
+            } else if (contactEmail.isNotBlank()) {
+                contactEmail.substringBefore("@")
+            } else {
+                "Bạn bè"
+            }
         }
 
         // If convId is not direct normalized format and we have emails, normalize it
@@ -113,6 +122,19 @@ class ChatActivity : AppCompatActivity() {
 
         initViews()
         loadLocalMessages()
+
+        if (contactEmail.isNotBlank()) {
+            com.vhn.connectx.net.FirebaseSyncManager.getUserProfile(contactEmail) { realUser ->
+                if (realUser != null && realUser.displayName.isNotBlank() &&
+                    !realUser.displayName.equals(sessionManager.currentUser.displayName, ignoreCase = true)) {
+                    contactTitle = realUser.displayName
+                    runOnUiThread {
+                        tvChatContactName.text = contactTitle
+                        tvChatAvatar.text = contactTitle.take(1).uppercase()
+                    }
+                }
+            }
+        }
     }
 
     private var messageListener: com.google.firebase.firestore.ListenerRegistration? = null

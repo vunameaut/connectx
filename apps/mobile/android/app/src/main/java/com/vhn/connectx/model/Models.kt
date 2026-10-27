@@ -15,7 +15,8 @@ data class FriendRequest(
     val senderEmail: String,
     val receiverEmail: String,
     val timestamp: String,
-    val status: String = "PENDING" // "PENDING", "ACCEPTED", "REJECTED"
+    val status: String = "PENDING", // "PENDING", "ACCEPTED", "REJECTED"
+    val receiverName: String = ""
 )
 
 data class Conversation(

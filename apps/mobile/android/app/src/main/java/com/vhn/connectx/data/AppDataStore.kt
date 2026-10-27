@@ -50,8 +50,24 @@ class AppDataStore(context: Context) {
 
     fun addContact(user: User): Boolean {
         val list = getContacts()
-        if (list.any { it.email.equals(user.email, ignoreCase = true) || it.id == user.id }) {
-            return false // Already exists
+        val existingIndex = list.indexOfFirst { it.email.equals(user.email, ignoreCase = true) || it.id == user.id }
+        if (existingIndex >= 0) {
+            val existing = list[existingIndex]
+            val isCurrentSuspect = existing.displayName.isBlank() ||
+                    existing.displayName.equals(existing.email.substringBefore("@"), ignoreCase = true)
+            val isNewBetter = user.displayName.isNotBlank() &&
+                    !user.displayName.equals(user.email.substringBefore("@"), ignoreCase = true)
+
+            if ((isCurrentSuspect && isNewBetter) ||
+                (user.displayName.isNotBlank() && user.displayName != existing.displayName)) {
+                list[existingIndex] = existing.copy(
+                    displayName = user.displayName,
+                    avatarUrl = user.avatarUrl.ifBlank { existing.avatarUrl }
+                )
+                saveContacts(list)
+                return true
+            }
+            return false // Already exists with valid name
         }
         list.add(0, user)
         saveContacts(list)
@@ -124,16 +140,28 @@ class AppDataStore(context: Context) {
 
         // Determine the other party's user object
         val otherUser = if (req.senderEmail.equals(myUser.email, ignoreCase = true)) {
+            val nameCandidate = req.receiverName.ifBlank { req.receiverEmail.substringBefore("@") }
+            val safeName = if (nameCandidate.equals(myUser.displayName, ignoreCase = true)) {
+                req.receiverEmail.substringBefore("@")
+            } else {
+                nameCandidate
+            }
             User(
-                id = "u_${System.currentTimeMillis()}",
-                displayName = req.receiverEmail.substringBefore("@"),
+                id = "u_${req.receiverEmail.hashCode()}",
+                displayName = safeName,
                 email = req.receiverEmail,
                 isOnline = true
             )
         } else {
+            val nameCandidate = req.senderName.ifBlank { req.senderEmail.substringBefore("@") }
+            val safeName = if (nameCandidate.equals(myUser.displayName, ignoreCase = true)) {
+                req.senderEmail.substringBefore("@")
+            } else {
+                nameCandidate
+            }
             User(
-                id = req.senderId.ifBlank { "u_${System.currentTimeMillis()}" },
-                displayName = req.senderName.ifBlank { req.senderEmail.substringBefore("@") },
+                id = req.senderId.ifBlank { "u_${req.senderEmail.hashCode()}" },
+                displayName = safeName,
                 email = req.senderEmail,
                 isOnline = true
             )
@@ -191,14 +219,22 @@ class AppDataStore(context: Context) {
     fun updateConversation(convId: String, title: String, lastMessage: String, timestamp: String) {
         val list = getConversations()
         val existingIndex = list.indexOfFirst { it.id == convId }
+        val finalTitle = if (title.isNotBlank()) {
+            title
+        } else if (existingIndex >= 0 && list[existingIndex].title.isNotBlank()) {
+            list[existingIndex].title
+        } else {
+            "Trò chuyện"
+        }
+
         val updated = Conversation(
             id = convId,
-            title = title,
+            title = finalTitle,
             lastMessage = lastMessage,
             timestamp = timestamp,
             unreadCount = 0,
             isGroup = false,
-            avatarInitial = title.ifBlank { "U" }.take(1).uppercase()
+            avatarInitial = finalTitle.ifBlank { "U" }.take(1).uppercase()
         )
         if (existingIndex >= 0) {
             list.removeAt(existingIndex)
@@ -227,9 +263,16 @@ class AppDataStore(context: Context) {
             list.add(message)
         }
         prefs.edit().putString(KEY_MESSAGES_PREFIX + convId, gson.toJson(list)).apply()
+
+        // Preserve existing conversation title so sending an outgoing message does NOT overwrite the title with my own name!
+        val convList = getConversations()
+        val convIndex = convList.indexOfFirst { it.id == convId }
+        val existingTitle = if (convIndex >= 0) convList[convIndex].title else ""
+        val titleToUse = if (existingTitle.isNotBlank()) existingTitle else message.senderName
+
         updateConversation(
             convId = convId,
-            title = message.senderName,
+            title = titleToUse,
             lastMessage = when (message.messageType) {
                 "image" -> "📷 [Hình ảnh]"
                 "call" -> if (message.isVideoCall) "📹 [Cuộc gọi video]" else "📞 [Cuộc gọi thoại]"

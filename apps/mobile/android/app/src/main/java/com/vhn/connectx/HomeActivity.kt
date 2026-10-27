@@ -244,9 +244,34 @@ class HomeActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshData()
+        healContactsAndConversations()
         syncFriendsAndContactsFromCloud()
         startListeningRealtimeFriendRequests()
         startListeningIncomingCalls()
+    }
+
+    private fun healContactsAndConversations() {
+        val myUser = sessionManager.currentUser
+        if (myUser.email.isBlank()) return
+        // Ensure my own profile is saved to Firestore
+        com.vhn.connectx.net.FirebaseSyncManager.saveUserProfile(myUser)
+
+        val contactsList = appDataStore.getContacts()
+        for (contact in contactsList) {
+            val isSuspect = contact.displayName.equals(myUser.displayName, ignoreCase = true) ||
+                    contact.displayName.equals(contact.email.substringBefore("@"), ignoreCase = true)
+            if (isSuspect && !contact.email.equals(myUser.email, ignoreCase = true)) {
+                com.vhn.connectx.net.FirebaseSyncManager.getUserProfile(contact.email) { realUser ->
+                    if (realUser != null && realUser.displayName.isNotBlank() &&
+                        !realUser.displayName.equals(myUser.displayName, ignoreCase = true)) {
+                        appDataStore.addContact(realUser)
+                        val convId = appDataStore.getDirectConvId(myUser.email, contact.email)
+                        appDataStore.updateConversation(convId, realUser.displayName, "Đã cập nhật thông tin bạn bè", "Vừa xong")
+                        runOnUiThread { refreshData() }
+                    }
+                }
+            }
+        }
     }
 
     private fun syncFriendsAndContactsFromCloud() {
@@ -256,14 +281,32 @@ class HomeActivity : AppCompatActivity() {
         com.vhn.connectx.net.FirebaseSyncManager.syncCloudContactsAndFriendships(
             myEmail = myEmail,
             onContactFound = { friendUser ->
-                if (appDataStore.addContact(friendUser)) {
-                    val convId = appDataStore.getDirectConvId(myEmail, friendUser.email)
+                val safeDisplayName = if (friendUser.displayName.equals(myEmail, ignoreCase = true) ||
+                    friendUser.displayName.equals(sessionManager.currentUser.displayName, ignoreCase = true)) {
+                    friendUser.email.substringBefore("@")
+                } else {
+                    friendUser.displayName
+                }
+                val safeFriend = friendUser.copy(displayName = safeDisplayName)
+                if (appDataStore.addContact(safeFriend)) {
+                    val convId = appDataStore.getDirectConvId(myEmail, safeFriend.email)
                     appDataStore.updateConversation(
                         convId = convId,
-                        title = friendUser.displayName,
+                        title = safeFriend.displayName,
                         lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
                         timestamp = "Vừa xong"
                     )
+                }
+
+                // Query Firestore to get real Google account name if available
+                com.vhn.connectx.net.FirebaseSyncManager.getUserProfile(safeFriend.email) { realUser ->
+                    if (realUser != null && realUser.displayName.isNotBlank() &&
+                        !realUser.displayName.equals(sessionManager.currentUser.displayName, ignoreCase = true)) {
+                        appDataStore.addContact(realUser)
+                        val convId = appDataStore.getDirectConvId(myEmail, realUser.email)
+                        appDataStore.updateConversation(convId, realUser.displayName, "Đã trở thành bạn bè! Hãy gửi lời chào.", "Vừa xong")
+                        runOnUiThread { refreshData() }
+                    }
                 }
             },
             onPendingFound = { pendingReq ->
@@ -408,7 +451,8 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun startListeningRealtimeFriendRequests() {
-        val myEmail = sessionManager.currentUser.email
+        val myUser = sessionManager.currentUser
+        val myEmail = myUser.email
         if (myEmail.isBlank()) return
 
         friendRequestListeners?.first?.remove()
@@ -427,37 +471,54 @@ class HomeActivity : AppCompatActivity() {
                 }
             },
             onAcceptedUpdate = { acceptedList ->
-                var addedAny = false
                 for (req in acceptedList) {
                     val isMeSender = req.senderEmail.equals(myEmail, ignoreCase = true)
                     val partnerEmail = if (isMeSender) req.receiverEmail else req.senderEmail
-                    val partnerName = if (isMeSender) {
-                        req.senderName.ifBlank { partnerEmail.substringBefore("@") }
+                    val fallbackName = if (isMeSender) {
+                        req.receiverName.ifBlank { partnerEmail.substringBefore("@") }
                     } else {
                         req.senderName.ifBlank { partnerEmail.substringBefore("@") }
                     }
+                    val safeFallbackName = if (fallbackName.equals(myUser.displayName, ignoreCase = true)) {
+                        partnerEmail.substringBefore("@")
+                    } else {
+                        fallbackName
+                    }
 
                     if (partnerEmail.isNotBlank() && !partnerEmail.equals(myEmail, ignoreCase = true)) {
-                        val partnerUser = com.vhn.connectx.model.User(
+                        val initialPartnerUser = com.vhn.connectx.model.User(
                             id = "u_${partnerEmail.hashCode()}",
-                            displayName = partnerName,
+                            displayName = safeFallbackName,
                             email = partnerEmail,
                             isOnline = true
                         )
-                        if (appDataStore.addContact(partnerUser)) {
+                        if (appDataStore.addContact(initialPartnerUser)) {
                             val convId = appDataStore.getDirectConvId(myEmail, partnerEmail)
                             appDataStore.updateConversation(
                                 convId = convId,
-                                title = partnerName,
+                                title = safeFallbackName,
                                 lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
                                 timestamp = "Vừa xong"
                             )
-                            addedAny = true
+                            runOnUiThread { refreshData() }
+                        }
+
+                        // Query Firestore to get the friend's real Google account name
+                        com.vhn.connectx.net.FirebaseSyncManager.getUserProfile(partnerEmail) { partnerProfile ->
+                            if (partnerProfile != null && partnerProfile.displayName.isNotBlank() &&
+                                !partnerProfile.displayName.equals(myUser.displayName, ignoreCase = true)) {
+                                appDataStore.addContact(partnerProfile)
+                                val convId = appDataStore.getDirectConvId(myEmail, partnerEmail)
+                                appDataStore.updateConversation(
+                                    convId = convId,
+                                    title = partnerProfile.displayName,
+                                    lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
+                                    timestamp = "Vừa xong"
+                                )
+                                runOnUiThread { refreshData() }
+                            }
                         }
                     }
-                }
-                if (addedAny) {
-                    refreshData()
                 }
             }
         )
@@ -912,7 +973,7 @@ class HomeActivity : AppCompatActivity() {
             .setMessage("Nhập email của người bạn muốn kết nối. Đối phương sẽ nhận được lời mời và đồng ý trước khi cả hai bắt đầu trò chuyện:")
             .setView(input)
             .setPositiveButton("Gửi lời mời") { _, _ ->
-                val targetEmail = input.text.toString().trim()
+                val targetEmail = input.text.toString().trim().lowercase()
                 val myUser = sessionManager.currentUser
 
                 if (targetEmail.isEmpty()) {
@@ -930,27 +991,36 @@ class HomeActivity : AppCompatActivity() {
                     return@setPositiveButton
                 }
 
-                val newReq = FriendRequest(
-                    id = "fr_${System.currentTimeMillis()}",
-                    senderId = myUser.id,
-                    senderName = myUser.displayName,
-                    senderEmail = myUser.email,
-                    receiverEmail = targetEmail,
-                    timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
-                    status = "PENDING"
-                )
+                // Query recipient's real Google display name from Firestore
+                com.vhn.connectx.net.FirebaseSyncManager.getUserProfile(targetEmail) { targetProfile ->
+                    val receiverGoogleName = targetProfile?.displayName?.ifBlank { null }
+                        ?: targetEmail.substringBefore("@")
 
-                // Save locally
-                appDataStore.sendFriendRequest(newReq)
+                    val newReq = FriendRequest(
+                        id = "fr_${System.currentTimeMillis()}",
+                        senderId = myUser.id,
+                        senderName = myUser.displayName,
+                        senderEmail = myUser.email,
+                        receiverEmail = targetEmail,
+                        receiverName = receiverGoogleName,
+                        timestamp = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date()),
+                        status = "PENDING"
+                    )
 
-                // Upload to Cloud Firestore so the other device receives it instantly online
-                com.vhn.connectx.net.FirebaseSyncManager.sendFriendRequest(newReq) {}
+                    // Save locally
+                    appDataStore.sendFriendRequest(newReq)
 
-                // Send to backend server as fallback
-                ApiClient.sendFriendRequest(this, newReq) { success -> }
+                    // Upload to Cloud Firestore so the other device receives it instantly online
+                    com.vhn.connectx.net.FirebaseSyncManager.sendFriendRequest(newReq) {}
 
-                Toast.makeText(this, "Đã gửi lời mời kết bạn tới $targetEmail! Vui lòng chờ đối phương chấp nhận.", Toast.LENGTH_LONG).show()
-                refreshData()
+                    // Send to backend server as fallback
+                    ApiClient.sendFriendRequest(this@HomeActivity, newReq) { success -> }
+
+                    runOnUiThread {
+                        Toast.makeText(this@HomeActivity, "Đã gửi lời mời kết bạn tới $receiverGoogleName ($targetEmail)!", Toast.LENGTH_LONG).show()
+                        refreshData()
+                    }
+                }
             }
             .setNegativeButton("Hủy", null)
             .show()
@@ -958,14 +1028,27 @@ class HomeActivity : AppCompatActivity() {
 
     private fun handleAcceptFriendRequest(req: FriendRequest) {
         val myUser = sessionManager.currentUser
-        val newFriend = appDataStore.acceptFriendRequest(req.id, myUser)
-        if (newFriend != null) {
+        // Fetch sender's real Google profile from Firestore to ensure accurate name
+        com.vhn.connectx.net.FirebaseSyncManager.getUserProfile(req.senderEmail) { senderProfile ->
+            val realSenderName = senderProfile?.displayName?.ifBlank { null }
+                ?: req.senderName.ifBlank { req.senderEmail.substringBefore("@") }
+            val safeSenderName = if (realSenderName.equals(myUser.displayName, ignoreCase = true)) {
+                req.senderEmail.substringBefore("@")
+            } else {
+                realSenderName
+            }
+            val updatedReq = req.copy(senderName = safeSenderName)
+            val newFriend = appDataStore.acceptFriendRequest(updatedReq.id, myUser)
             com.vhn.connectx.net.FirebaseSyncManager.respondFriendRequest(req.id, "ACCEPTED", myUser.displayName) {}
-            ApiClient.respondFriendRequest(this, req.id, "ACCEPTED") {}
-            Toast.makeText(this, "Đã trở thành bạn bè với ${newFriend.displayName}!", Toast.LENGTH_SHORT).show()
-            refreshData()
-            // Open direct chat
-            openChatWithUser(newFriend)
+            ApiClient.respondFriendRequest(this@HomeActivity, req.id, "ACCEPTED") {}
+            runOnUiThread {
+                val friendName = newFriend?.displayName ?: safeSenderName
+                Toast.makeText(this@HomeActivity, "Đã trở thành bạn bè với $friendName!", Toast.LENGTH_SHORT).show()
+                refreshData()
+                if (newFriend != null) {
+                    openChatWithUser(newFriend)
+                }
+            }
         }
     }
 
@@ -1160,6 +1243,7 @@ class HomeActivity : AppCompatActivity() {
                 if (newName.isNotBlank()) {
                     val updatedUser = user.copy(displayName = newName)
                     sessionManager.currentUser = updatedUser
+                    com.vhn.connectx.net.FirebaseSyncManager.saveUserProfile(updatedUser)
                     tvProfileDisplayName.text = newName
                     val initial = newName.take(1).uppercase()
                     tvProfileLargeAvatar.text = initial
