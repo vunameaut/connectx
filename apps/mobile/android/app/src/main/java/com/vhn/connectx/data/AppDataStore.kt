@@ -74,6 +74,17 @@ class AppDataStore(context: Context) {
         return true
     }
 
+    fun updateContactDisplayName(email: String, newName: String) {
+        if (email.isBlank() || newName.isBlank()) return
+        val list = getContacts()
+        val index = list.indexOfFirst { it.email.equals(email, ignoreCase = true) }
+        if (index >= 0) {
+            val contact = list[index]
+            list[index] = contact.copy(displayName = newName)
+            saveContacts(list)
+        }
+    }
+
     fun removeContact(userId: String) {
         val list = getContacts()
         list.removeAll { it.id == userId }
@@ -170,14 +181,19 @@ class AppDataStore(context: Context) {
         // Add to contacts
         addContact(otherUser)
 
-        // Automatically create a welcoming conversation
+        // Automatically create or update welcoming conversation
         val convId = getDirectConvId(myUser.email, otherUser.email)
-        updateConversation(
-            convId = convId,
-            title = otherUser.displayName,
-            lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
-            timestamp = "Vừa xong"
-        )
+        val existing = getConversations().find { it.id == convId }
+        if (existing == null) {
+            updateConversation(
+                convId = convId,
+                title = otherUser.displayName,
+                lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
+                timestamp = "Vừa xong"
+            )
+        } else {
+            updateConversationTitle(convId, otherUser.displayName)
+        }
 
         return otherUser
     }
@@ -243,6 +259,20 @@ class AppDataStore(context: Context) {
         prefs.edit().putString(KEY_CONVERSATIONS, gson.toJson(list)).apply()
     }
 
+    fun updateConversationTitle(convId: String, newTitle: String) {
+        if (newTitle.isBlank()) return
+        val list = getConversations()
+        val index = list.indexOfFirst { it.id == convId }
+        if (index >= 0) {
+            val conv = list[index]
+            list[index] = conv.copy(
+                title = newTitle,
+                avatarInitial = newTitle.take(1).uppercase()
+            )
+            prefs.edit().putString(KEY_CONVERSATIONS, gson.toJson(list)).apply()
+        }
+    }
+
     // --- MESSAGES ---
     fun getMessages(convId: String): MutableList<Message> {
         val json = prefs.getString(KEY_MESSAGES_PREFIX + convId, null) ?: return mutableListOf()
@@ -268,7 +298,13 @@ class AppDataStore(context: Context) {
         val convList = getConversations()
         val convIndex = convList.indexOfFirst { it.id == convId }
         val existingTitle = if (convIndex >= 0) convList[convIndex].title else ""
-        val titleToUse = if (existingTitle.isNotBlank()) existingTitle else message.senderName
+        val titleToUse = if (existingTitle.isNotBlank()) {
+            existingTitle
+        } else if (!message.isMe && message.senderName.isNotBlank()) {
+            message.senderName
+        } else {
+            ""
+        }
 
         updateConversation(
             convId = convId,

@@ -100,13 +100,16 @@ class ChatActivity : AppCompatActivity() {
         contactTitle = intent.getStringExtra("EXTRA_CONV_TITLE") ?: "Bạn bè"
         contactEmail = intent.getStringExtra("EXTRA_CONTACT_EMAIL") ?: ""
 
+        val myName = sessionManager.currentUser.displayName.trim()
+        val myEmail = sessionManager.currentUser.email.trim().lowercase()
+
         // If contact has a custom stored nickname, load it
         val storedNick = appDataStore.getNickname(contactEmail)
         if (!storedNick.isNullOrBlank()) {
             contactTitle = storedNick
-        } else if (contactTitle.equals(sessionManager.currentUser.displayName, ignoreCase = true)) {
+        } else if (contactTitle.equals(myName, ignoreCase = true) || contactTitle.isBlank() || contactTitle == "Trò chuyện") {
             val contactInDb = appDataStore.getContacts().find { it.email.equals(contactEmail, ignoreCase = true) }
-            contactTitle = if (contactInDb != null && !contactInDb.displayName.equals(sessionManager.currentUser.displayName, ignoreCase = true)) {
+            contactTitle = if (contactInDb != null && !contactInDb.displayName.equals(myName, ignoreCase = true) && contactInDb.displayName.isNotBlank()) {
                 contactInDb.displayName
             } else if (contactEmail.isNotBlank()) {
                 contactEmail.substringBefore("@")
@@ -117,7 +120,13 @@ class ChatActivity : AppCompatActivity() {
 
         // If convId is not direct normalized format and we have emails, normalize it
         if (!convId.startsWith("conv_") && contactEmail.isNotBlank()) {
-            convId = appDataStore.getDirectConvId(sessionManager.currentUser.email, contactEmail)
+            convId = appDataStore.getDirectConvId(myEmail, contactEmail)
+        }
+
+        // Persist the sanitized/resolved title right away so HomeActivity lists immediately reflect it
+        appDataStore.updateConversationTitle(convId, contactTitle)
+        if (contactEmail.isNotBlank()) {
+            appDataStore.updateContactDisplayName(contactEmail, contactTitle)
         }
 
         initViews()
@@ -126,8 +135,10 @@ class ChatActivity : AppCompatActivity() {
         if (contactEmail.isNotBlank()) {
             com.vhn.connectx.net.FirebaseSyncManager.getUserProfile(contactEmail) { realUser ->
                 if (realUser != null && realUser.displayName.isNotBlank() &&
-                    !realUser.displayName.equals(sessionManager.currentUser.displayName, ignoreCase = true)) {
+                    !realUser.displayName.equals(myName, ignoreCase = true)) {
                     contactTitle = realUser.displayName
+                    appDataStore.updateConversationTitle(convId, contactTitle)
+                    appDataStore.addContact(realUser)
                     runOnUiThread {
                         tvChatContactName.text = contactTitle
                         tvChatAvatar.text = contactTitle.take(1).uppercase()
@@ -647,10 +658,14 @@ class ChatActivity : AppCompatActivity() {
                 .setPositiveButton("Lưu") { _, _ ->
                     val newNick = input.text.toString().trim()
                     appDataStore.setNickname(contactEmail, newNick)
-                    contactTitle = if (newNick.isNotBlank()) newNick else (intent.getStringExtra("EXTRA_CONV_TITLE") ?: "Bạn bè")
+                    val defaultFallback = if (contactEmail.isNotBlank()) contactEmail.substringBefore("@") else "Bạn bè"
+                    contactTitle = if (newNick.isNotBlank()) newNick else defaultFallback
                     tvChatContactName.text = contactTitle
                     tvChatAvatar.text = contactTitle.take(1).uppercase()
-                    appDataStore.updateConversation(convId, contactTitle, messages.lastOrNull()?.text ?: "Đã cập nhật", "Vừa xong")
+                    appDataStore.updateConversationTitle(convId, contactTitle)
+                    if (contactEmail.isNotBlank()) {
+                        appDataStore.updateContactDisplayName(contactEmail, contactTitle)
+                    }
                     Toast.makeText(this, "Đã cập nhật biệt danh: $contactTitle", Toast.LENGTH_SHORT).show()
                 }
                 .setNegativeButton("Hủy", null)

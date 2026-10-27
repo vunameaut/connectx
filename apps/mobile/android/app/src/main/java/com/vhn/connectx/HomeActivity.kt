@@ -253,20 +253,54 @@ class HomeActivity : AppCompatActivity() {
     private fun healContactsAndConversations() {
         val myUser = sessionManager.currentUser
         if (myUser.email.isBlank()) return
+        val myName = myUser.displayName.trim()
+        val myEmail = myUser.email.trim().lowercase()
+
         // Ensure my own profile is saved to Firestore
         com.vhn.connectx.net.FirebaseSyncManager.saveUserProfile(myUser)
 
+        // 1. Loop through contacts and fetch Google account profile for each
         val contactsList = appDataStore.getContacts()
         for (contact in contactsList) {
-            val isSuspect = contact.displayName.equals(myUser.displayName, ignoreCase = true) ||
-                    contact.displayName.equals(contact.email.substringBefore("@"), ignoreCase = true)
-            if (isSuspect && !contact.email.equals(myUser.email, ignoreCase = true)) {
-                com.vhn.connectx.net.FirebaseSyncManager.getUserProfile(contact.email) { realUser ->
+            if (contact.email.equals(myEmail, ignoreCase = true)) continue
+            com.vhn.connectx.net.FirebaseSyncManager.getUserProfile(contact.email) { realUser ->
+                if (realUser != null && realUser.displayName.isNotBlank() &&
+                    !realUser.displayName.equals(myName, ignoreCase = true)) {
+                    appDataStore.addContact(realUser)
+                    val convId = appDataStore.getDirectConvId(myEmail, contact.email)
+                    appDataStore.updateConversationTitle(convId, realUser.displayName)
+                    runOnUiThread { refreshData() }
+                }
+            }
+        }
+
+        // 2. Loop through conversations: if title is suspect, resolve from Google profile
+        val convList = appDataStore.getConversations()
+        for (conv in convList) {
+            val isSuspectTitle = conv.title.trim().equals(myName, ignoreCase = true) ||
+                    conv.title.isBlank() || conv.title == "Trò chuyện" || conv.title == "Bạn bè"
+            if (!isSuspectTitle) continue
+
+            var partnerEmail = ""
+            val matchedContact = contactsList.find { appDataStore.getDirectConvId(myEmail, it.email) == conv.id }
+            if (matchedContact != null) {
+                partnerEmail = matchedContact.email
+            } else if (conv.id.startsWith("conv_")) {
+                val cleanMy = myEmail.replace("[^a-zA-Z0-9]".toRegex(), "_")
+                val parts = conv.id.removePrefix("conv_").split("__")
+                val partnerPart = parts.firstOrNull { it != cleanMy && it.isNotBlank() }
+                val contactByPart = contactsList.find { it.email.replace("[^a-zA-Z0-9]".toRegex(), "_") == partnerPart }
+                if (contactByPart != null) {
+                    partnerEmail = contactByPart.email
+                }
+            }
+
+            if (partnerEmail.isNotBlank() && !partnerEmail.equals(myEmail, ignoreCase = true)) {
+                com.vhn.connectx.net.FirebaseSyncManager.getUserProfile(partnerEmail) { realUser ->
                     if (realUser != null && realUser.displayName.isNotBlank() &&
-                        !realUser.displayName.equals(myUser.displayName, ignoreCase = true)) {
+                        !realUser.displayName.equals(myName, ignoreCase = true)) {
+                        appDataStore.updateConversationTitle(conv.id, realUser.displayName)
                         appDataStore.addContact(realUser)
-                        val convId = appDataStore.getDirectConvId(myUser.email, contact.email)
-                        appDataStore.updateConversation(convId, realUser.displayName, "Đã cập nhật thông tin bạn bè", "Vừa xong")
                         runOnUiThread { refreshData() }
                     }
                 }
@@ -290,12 +324,17 @@ class HomeActivity : AppCompatActivity() {
                 val safeFriend = friendUser.copy(displayName = safeDisplayName)
                 if (appDataStore.addContact(safeFriend)) {
                     val convId = appDataStore.getDirectConvId(myEmail, safeFriend.email)
-                    appDataStore.updateConversation(
-                        convId = convId,
-                        title = safeFriend.displayName,
-                        lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
-                        timestamp = "Vừa xong"
-                    )
+                    val existing = appDataStore.getConversations().find { it.id == convId }
+                    if (existing == null) {
+                        appDataStore.updateConversation(
+                            convId = convId,
+                            title = safeFriend.displayName,
+                            lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
+                            timestamp = "Vừa xong"
+                        )
+                    } else {
+                        appDataStore.updateConversationTitle(convId, safeFriend.displayName)
+                    }
                 }
 
                 // Query Firestore to get real Google account name if available
@@ -304,7 +343,7 @@ class HomeActivity : AppCompatActivity() {
                         !realUser.displayName.equals(sessionManager.currentUser.displayName, ignoreCase = true)) {
                         appDataStore.addContact(realUser)
                         val convId = appDataStore.getDirectConvId(myEmail, realUser.email)
-                        appDataStore.updateConversation(convId, realUser.displayName, "Đã trở thành bạn bè! Hãy gửi lời chào.", "Vừa xong")
+                        appDataStore.updateConversationTitle(convId, realUser.displayName)
                         runOnUiThread { refreshData() }
                     }
                 }
@@ -494,12 +533,17 @@ class HomeActivity : AppCompatActivity() {
                         )
                         if (appDataStore.addContact(initialPartnerUser)) {
                             val convId = appDataStore.getDirectConvId(myEmail, partnerEmail)
-                            appDataStore.updateConversation(
-                                convId = convId,
-                                title = safeFallbackName,
-                                lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
-                                timestamp = "Vừa xong"
-                            )
+                            val existing = appDataStore.getConversations().find { it.id == convId }
+                            if (existing == null) {
+                                appDataStore.updateConversation(
+                                    convId = convId,
+                                    title = safeFallbackName,
+                                    lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
+                                    timestamp = "Vừa xong"
+                                )
+                            } else {
+                                appDataStore.updateConversationTitle(convId, safeFallbackName)
+                            }
                             runOnUiThread { refreshData() }
                         }
 
@@ -509,12 +553,7 @@ class HomeActivity : AppCompatActivity() {
                                 !partnerProfile.displayName.equals(myUser.displayName, ignoreCase = true)) {
                                 appDataStore.addContact(partnerProfile)
                                 val convId = appDataStore.getDirectConvId(myEmail, partnerEmail)
-                                appDataStore.updateConversation(
-                                    convId = convId,
-                                    title = partnerProfile.displayName,
-                                    lastMessage = "Đã trở thành bạn bè! Hãy gửi lời chào.",
-                                    timestamp = "Vừa xong"
-                                )
+                                appDataStore.updateConversationTitle(convId, partnerProfile.displayName)
                                 runOnUiThread { refreshData() }
                             }
                         }
@@ -549,9 +588,10 @@ class HomeActivity : AppCompatActivity() {
         rvConversations = findViewById(R.id.rvConversations)
         rvConversations.layoutManager = LinearLayoutManager(this)
         conversationAdapter = ConversationAdapter(conversations) { conv ->
-            // Find contact email for this conversation (by conversation id first, then by name)
+            // Find contact email for this conversation (by direct ID, partial ID, or matching name)
             val myEmail = sessionManager.currentUser.email
             val matchedContact = contacts.find { appDataStore.getDirectConvId(myEmail, it.email) == conv.id }
+                ?: contacts.find { conv.id.startsWith("conv_") && conv.id.contains(it.email.trim().lowercase().replace("[^a-zA-Z0-9]".toRegex(), "_")) }
                 ?: contacts.find { it.displayName.trim().equals(conv.title.trim(), ignoreCase = true) }
             val contactEmail = matchedContact?.email ?: ""
             openChat(conv.id, conv.title, contactEmail)
@@ -855,7 +895,9 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun refreshData() {
-        val myEmail = sessionManager.currentUser.email
+        val myUser = sessionManager.currentUser
+        val myEmail = myUser.email.trim().lowercase()
+        val myName = myUser.displayName.trim()
 
         // 1. Pending Friend Requests
         pendingRequests.clear()
@@ -869,9 +911,25 @@ class HomeActivity : AppCompatActivity() {
             layoutPendingRequests.visibility = View.GONE
         }
 
-        // 2. Contacts
+        // 2. Contacts (Sanitize so current user display name never appears on a friend's card)
         contacts.clear()
-        contacts.addAll(appDataStore.getContacts())
+        val rawContacts = appDataStore.getContacts()
+        var contactsUpdated = false
+        val sanitizedContacts = rawContacts.map { contact ->
+            val isMyName = myName.isNotBlank() && contact.displayName.trim().equals(myName, ignoreCase = true)
+            val isBlank = contact.displayName.isBlank()
+            if ((isMyName || isBlank) && !contact.email.equals(myEmail, ignoreCase = true)) {
+                contactsUpdated = true
+                val safeName = contact.email.substringBefore("@")
+                contact.copy(displayName = safeName)
+            } else {
+                contact
+            }
+        }
+        if (contactsUpdated) {
+            appDataStore.saveContacts(sanitizedContacts)
+        }
+        contacts.addAll(sanitizedContacts)
         contactAdapter.notifyDataSetChanged()
 
         if (contacts.isEmpty()) {
@@ -885,9 +943,43 @@ class HomeActivity : AppCompatActivity() {
             rvContacts.visibility = View.VISIBLE
         }
 
-        // 3. Conversations
+        // 3. Conversations (Sanitize so current user display name never appears as a conversation title)
         conversations.clear()
-        conversations.addAll(appDataStore.getConversations())
+        val rawConversations = appDataStore.getConversations()
+        val sanitizedConversations = rawConversations.map { conv ->
+            val isMyName = myName.isNotBlank() && conv.title.trim().equals(myName, ignoreCase = true)
+            val isBlank = conv.title.isBlank() || conv.title == "Trò chuyện"
+            if (isMyName || isBlank) {
+                val matchedContact = sanitizedContacts.find { 
+                    appDataStore.getDirectConvId(myEmail, it.email) == conv.id ||
+                    (conv.id.startsWith("conv_") && conv.id.contains(it.email.trim().lowercase().replace("[^a-zA-Z0-9]".toRegex(), "_")))
+                }
+                
+                val bestTitle = if (matchedContact != null && !matchedContact.displayName.trim().equals(myName, ignoreCase = true) && matchedContact.displayName.isNotBlank()) {
+                    matchedContact.displayName
+                } else {
+                    val msgs = appDataStore.getMessages(conv.id)
+                    val partnerMsg = msgs.firstOrNull { !it.isMe && it.senderName.isNotBlank() && !it.senderName.equals(myName, ignoreCase = true) }
+                    if (partnerMsg != null) {
+                        partnerMsg.senderName
+                    } else if (matchedContact != null) {
+                        matchedContact.email.substringBefore("@")
+                    } else if (conv.id.startsWith("conv_")) {
+                        val cleanMy = myEmail.replace("[^a-zA-Z0-9]".toRegex(), "_")
+                        val parts = conv.id.removePrefix("conv_").split("__")
+                        val partnerPart = parts.firstOrNull { it != cleanMy && it.isNotBlank() }
+                        partnerPart ?: "Bạn bè"
+                    } else {
+                        "Bạn bè"
+                    }
+                }
+                appDataStore.updateConversationTitle(conv.id, bestTitle)
+                conv.copy(title = bestTitle, avatarInitial = bestTitle.take(1).uppercase())
+            } else {
+                conv
+            }
+        }
+        conversations.addAll(sanitizedConversations)
         conversationAdapter.notifyDataSetChanged()
 
         if (layoutHomeSearch.visibility == View.VISIBLE && etHomeSearch.text.isNotBlank()) {
@@ -912,8 +1004,17 @@ class HomeActivity : AppCompatActivity() {
                     if (index >= 0) {
                         val current = conversations[index]
                         if (current.lastMessage != lastMsg || current.timestamp != lastTime) {
-                            appDataStore.updateConversation(conv.id, current.title, lastMsg, lastTime)
-                            conversations[index] = current.copy(lastMessage = lastMsg, timestamp = lastTime)
+                            val titleToPreserve = if (current.title.trim().equals(myName, ignoreCase = true)) {
+                                if (senderName.isNotBlank() && !senderName.equals(myName, ignoreCase = true)) {
+                                    senderName
+                                } else {
+                                    "Bạn bè"
+                                }
+                            } else {
+                                current.title
+                            }
+                            appDataStore.updateConversation(conv.id, titleToPreserve, lastMsg, lastTime)
+                            conversations[index] = current.copy(title = titleToPreserve, lastMessage = lastMsg, timestamp = lastTime)
                             conversationAdapter.notifyItemChanged(index)
                         }
                     }
@@ -1106,9 +1207,15 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun openChat(conversationId: String, title: String, contactEmail: String) {
+        val myName = sessionManager.currentUser.displayName.trim()
+        val safeTitle = if (title.trim().equals(myName, ignoreCase = true) || title.isBlank() || title == "Trò chuyện") {
+            if (contactEmail.isNotBlank()) contactEmail.substringBefore("@") else "Bạn bè"
+        } else {
+            title
+        }
         val intent = Intent(this, ChatActivity::class.java).apply {
             putExtra("EXTRA_CONV_ID", conversationId)
-            putExtra("EXTRA_CONV_TITLE", title)
+            putExtra("EXTRA_CONV_TITLE", safeTitle)
             putExtra("EXTRA_CONTACT_EMAIL", contactEmail)
         }
         startActivity(intent)
@@ -1147,6 +1254,7 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun groupCallHistory(items: List<CallHistoryItem>): List<GroupedCallHistory> {
+        val myName = sessionManager.currentUser.displayName.trim()
         val map = linkedMapOf<String, GroupedCallHistory>()
         for (item in items) {
             val key = if (item.contactEmail.isNotBlank()) {
@@ -1154,14 +1262,26 @@ class HomeActivity : AppCompatActivity() {
             } else {
                 item.contactName.lowercase().trim()
             }
+            val safeName = if (item.contactName.trim().equals(myName, ignoreCase = true) || item.contactName.isBlank()) {
+                val matched = contacts.find { it.email.equals(item.contactEmail, ignoreCase = true) }
+                if (matched != null && !matched.displayName.equals(myName, ignoreCase = true)) {
+                    matched.displayName
+                } else if (item.contactEmail.isNotBlank()) {
+                    item.contactEmail.substringBefore("@")
+                } else {
+                    "Bạn bè"
+                }
+            } else {
+                item.contactName
+            }
             val group = map.getOrPut(key) {
                 GroupedCallHistory(
-                    contactName = item.contactName,
+                    contactName = safeName,
                     contactEmail = item.contactEmail,
                     calls = mutableListOf()
                 )
             }
-            group.calls.add(item)
+            group.calls.add(item.copy(contactName = safeName))
         }
         return map.values.toList()
     }
